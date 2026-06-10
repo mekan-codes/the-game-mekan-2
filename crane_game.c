@@ -21,7 +21,10 @@
 #define RAIL_MIN_X 88.0
 #define RAIL_MAX_X 1192.0
 #define LEVEL_COUNT 6
-#define MAX_STATIC_OBSTACLES 8
+#define STAR_COUNT 3
+#define CAMPAIGN_STAR_TOTAL (LEVEL_COUNT * STAR_COUNT)
+#define MAX_STATIC_OBSTACLES 12
+#define MAX_UNSTABLE_ZONES 2
 #define MAX_WIND_ZONES 2
 #define MAX_MOVING_GATES 2
 #define MAX_MAGNETS 2
@@ -80,7 +83,8 @@ typedef enum {
     LOSS_NONE,
     LOSS_TIMEOUT,
     LOSS_COLLISION,
-    LOSS_SWING
+    LOSS_SWING,
+    LOSS_UNSTABLE
 } LossReason;
 
 typedef struct {
@@ -175,6 +179,18 @@ typedef struct {
     double x;
     double y;
     double radius;
+    int collected;
+} StarCollectible;
+
+typedef struct {
+    FRect rect;
+    double timeLimit;
+} UnstableZone;
+
+typedef struct {
+    double x;
+    double y;
+    double radius;
     double strength;
     double omega;
     double phase;
@@ -241,12 +257,17 @@ typedef struct {
     double stableSpeedLimit;
     double stableAngleLimit;
     double stableOmegaLimit;
+    double safeChainMotion;
+    double requiredHoldTime;
     double lowTargetRatio;
     CargoKind cargoKind;
     PendulumMode pendulumMode;
     double windScale;
     double magnetScale;
     double dampingScale;
+    StarCollectible stars[STAR_COUNT];
+    UnstableZone unstableZones[MAX_UNSTABLE_ZONES];
+    int unstableZoneCount;
     FRect obstacles[MAX_STATIC_OBSTACLES];
     int obstacleCount;
     WindZone windZones[MAX_WIND_ZONES];
@@ -335,12 +356,21 @@ typedef struct {
     int deliveryValid;
     int cargoInWind;
     int cargoInMagnet;
+    int chainTooMuchMotion;
+    int unstableZoneActive;
+    int unstableZoneTooLong;
+    int lastStarsCollected;
+    int bestStars[LEVEL_COUNT];
     double mouseX;
     double mouseY;
     int mouseValid;
     double timeLeft;
     double levelElapsed;
     double stableTimer;
+    double chainMotion;
+    double unstableZoneTimer;
+    double starMessageTimer;
+    double lastCompletionTime;
     LossReason lossReason;
     Trolley trolley;
     Cargo cargo;
@@ -913,7 +943,7 @@ static FRect pause_button_rect(int index) {
 }
 
 static FRect win_button_rect(int index) {
-    return (FRect){430.0, 318.0 + (double)index * 56.0, 420.0, 48.0};
+    return (FRect){430.0, 348.0 + (double)index * 50.0, 420.0, 44.0};
 }
 
 static FRect lose_button_rect(int index) {
@@ -1053,6 +1083,35 @@ static int cargo_hits_segment(FRect cargo, double ax, double ay, double bx, doub
     return point_segment_distance(cx, cy, ax, ay, bx, by) <= radius + cargoRadius;
 }
 
+static void add_obstacle(Level *level, FRect obstacle) {
+    if (level->obstacleCount < MAX_STATIC_OBSTACLES) {
+        level->obstacles[level->obstacleCount++] = obstacle;
+    }
+}
+
+static void add_bay_walls(Level *level, double wallTop, double wallHeight) {
+    FRect target = level->targetBase;
+    add_obstacle(level, (FRect){target.x - 30.0, wallTop, 22.0, wallHeight});
+    add_obstacle(level, (FRect){target.x + target.w + 8.0, wallTop, 22.0, wallHeight});
+}
+
+static void set_star(Level *level, int index, double x, double y, double radius) {
+    if (index >= 0 && index < STAR_COUNT) {
+        level->stars[index].x = x;
+        level->stars[index].y = y;
+        level->stars[index].radius = radius;
+        level->stars[index].collected = 0;
+    }
+}
+
+static void add_unstable_zone(Level *level, FRect rect, double timeLimit) {
+    if (level->unstableZoneCount < MAX_UNSTABLE_ZONES) {
+        level->unstableZones[level->unstableZoneCount].rect = rect;
+        level->unstableZones[level->unstableZoneCount].timeLimit = timeLimit;
+        level->unstableZoneCount++;
+    }
+}
+
 static void initialize_levels(Game *game) {
     Level *l;
     int i;
@@ -1063,121 +1122,159 @@ static void initialize_levels(Game *game) {
         game->levels[i].windScale = 1.0;
         game->levels[i].magnetScale = 1.0;
         game->levels[i].dampingScale = 1.0;
+        game->levels[i].requiredHoldTime = WIN_STABLE_SECONDS;
     }
 
     l = &game->levels[0];
     l->name = "Level 1: Intro Crane Test";
-    l->objective = "Single pendulum: deliver gently.";
-    l->hint = "Open training route. Move smoothly, lower into the wide bay, and hold steady.";
-    l->timeLimit = 115.0;
-    l->startTrolleyX = 180.0;
-    l->startCableLength = 260.0;
+    l->objective = "Single pendulum: collect stars, then pocket the cargo.";
+    l->hint = "Medium bay, one overhead beam, and three optional stars teach the scoring route.";
+    l->timeLimit = 110.0;
+    l->startTrolleyX = 165.0;
+    l->startCableLength = 270.0;
     l->startTheta = 0.03;
-    l->targetBase = (FRect){845.0, 552.0, 310.0, 82.0};
-    l->stableSpeedLimit = 70.0;
+    l->targetBase = (FRect){970.0, 552.0, 170.0, 82.0};
+    l->stableSpeedLimit = 75.0;
     l->stableAngleLimit = 0.14;
-    l->stableOmegaLimit = 0.45;
-    l->lowTargetRatio = 0.42;
-    l->obstacles[0] = (FRect){785.0, 348.0, 235.0, 38.0};
-    l->obstacleCount = 1;
+    l->stableOmegaLimit = 0.42;
+    l->lowTargetRatio = 0.50;
+    add_obstacle(l, (FRect){820.0, 360.0, 235.0, 36.0});
+    add_bay_walls(l, 516.0, 116.0);
+    set_star(l, 0, 505.0, 370.0, 25.0);
+    set_star(l, 1, 890.0, 585.0, 25.0);
+    set_star(l, 2, 930.0, 326.0, 25.0);
 
     l = &game->levels[1];
-    l->name = "Level 2: Hard Single Pendulum";
-    l->objective = "Single pendulum: narrow passage.";
-    l->hint = "Ceiling beams prevent high travel. Thread the corridor and settle softly.";
-    l->timeLimit = 135.0;
+    l->name = "Level 2: Single Pendulum Gate Trial";
+    l->objective = "Single pendulum: low, lift, low, then bay.";
+    l->hint = "One cable height cannot solve this. Change length through each gate.";
+    l->timeLimit = 100.0;
     l->startTrolleyX = 160.0;
     l->startCableLength = 275.0;
     l->startTheta = -0.035;
-    l->targetBase = (FRect){925.0, 552.0, 235.0, 82.0};
-    l->stableSpeedLimit = 46.0;
-    l->stableAngleLimit = 0.10;
-    l->stableOmegaLimit = 0.31;
-    l->lowTargetRatio = 0.52;
+    l->targetBase = (FRect){1035.0, 552.0, 115.0, 82.0};
+    l->stableSpeedLimit = 50.0;
+    l->stableAngleLimit = 0.087;
+    l->stableOmegaLimit = 0.28;
+    l->lowTargetRatio = 0.56;
     l->cargoKind = CARGO_FRAGILE;
-    l->obstacles[0] = (FRect){275.0, 322.0, 660.0, 36.0};
-    l->obstacles[1] = (FRect){510.0, 505.0, 130.0, 68.0};
-    l->obstacles[2] = (FRect){760.0, 430.0, 112.0, 42.0};
-    l->obstacleCount = 3;
+    add_obstacle(l, (FRect){260.0, 330.0, 300.0, 36.0});
+    add_obstacle(l, (FRect){560.0, 500.0, 118.0, 80.0});
+    add_obstacle(l, (FRect){730.0, 342.0, 265.0, 36.0});
+    add_obstacle(l, (FRect){928.0, 492.0, 58.0, 42.0});
+    add_bay_walls(l, 514.0, 118.0);
+    set_star(l, 0, 410.0, 410.0, 24.0);
+    set_star(l, 1, 620.0, 455.0, 24.0);
+    set_star(l, 2, 955.0, 505.0, 24.0);
 
     l = &game->levels[2];
-    l->name = "Level 3: Double Pendulum Training";
-    l->objective = "Double pendulum: move smoothly.";
-    l->hint = "Two links amplify sudden trolley motion. Use gentle starts and the stabilizer.";
-    l->timeLimit = 150.0;
+    l->name = "Level 3: Double Pendulum Stabilization";
+    l->objective = "Double pendulum: calm the whole chain.";
+    l->hint = "Cargo speed alone is not enough. The upper link must settle too.";
+    l->timeLimit = 120.0;
     l->startTrolleyX = 150.0;
     l->startCableLength = 320.0;
     l->startTheta = 0.02;
-    l->targetBase = (FRect){840.0, 552.0, 310.0, 82.0};
-    l->stableSpeedLimit = 62.0;
+    l->targetBase = (FRect){995.0, 552.0, 145.0, 82.0};
+    l->stableSpeedLimit = 45.0;
     l->stableAngleLimit = 0.18;
     l->stableOmegaLimit = 0.62;
-    l->lowTargetRatio = 0.44;
+    l->safeChainMotion = 180.0;
+    l->lowTargetRatio = 0.53;
     l->pendulumMode = PENDULUM_DOUBLE;
     l->dampingScale = 1.08;
-    l->obstacles[0] = (FRect){555.0, 378.0, 190.0, 34.0};
-    l->obstacleCount = 1;
+    add_obstacle(l, (FRect){500.0, 354.0, 220.0, 34.0});
+    add_obstacle(l, (FRect){805.0, 350.0, 170.0, 34.0});
+    add_obstacle(l, (FRect){820.0, 500.0, 88.0, 82.0});
+    add_bay_walls(l, 514.0, 118.0);
+    set_star(l, 0, 485.0, 330.0, 24.0);
+    set_star(l, 1, 680.0, 505.0, 24.0);
+    set_star(l, 2, 910.0, 440.0, 24.0);
 
     l = &game->levels[3];
-    l->name = "Level 4: Hard Double Pendulum";
-    l->objective = "Double pendulum: precision route.";
-    l->hint = "Low underpass, raised block, recessed bay. Active cable control matters.";
-    l->timeLimit = 175.0;
+    l->name = "Level 4: Double Pendulum Needle Corridor";
+    l->objective = "Double pendulum: thread the no-stop corridor.";
+    l->hint = "A narrow S-route and unstable zone punish creeping and swing.";
+    l->timeLimit = 130.0;
     l->startTrolleyX = 150.0;
     l->startCableLength = 335.0;
     l->startTheta = -0.025;
-    l->targetBase = (FRect){930.0, 552.0, 230.0, 82.0};
-    l->stableSpeedLimit = 43.0;
+    l->targetBase = (FRect){1060.0, 552.0, 95.0, 82.0};
+    l->stableSpeedLimit = 32.0;
     l->stableAngleLimit = 0.13;
     l->stableOmegaLimit = 0.45;
-    l->lowTargetRatio = 0.52;
+    l->safeChainMotion = 110.0;
+    l->requiredHoldTime = 3.5;
+    l->lowTargetRatio = 0.58;
     l->cargoKind = CARGO_FRAGILE;
     l->pendulumMode = PENDULUM_DOUBLE;
     l->dampingScale = 1.02;
-    l->obstacles[0] = (FRect){315.0, 330.0, 350.0, 36.0};
-    l->obstacles[1] = (FRect){510.0, 500.0, 126.0, 76.0};
-    l->obstacles[2] = (FRect){720.0, 388.0, 220.0, 36.0};
-    l->obstacleCount = 3;
+    add_obstacle(l, (FRect){250.0, 328.0, 260.0, 36.0});
+    add_obstacle(l, (FRect){420.0, 496.0, 90.0, 84.0});
+    add_obstacle(l, (FRect){540.0, 318.0, 240.0, 36.0});
+    add_obstacle(l, (FRect){710.0, 470.0, 85.0, 102.0});
+    add_obstacle(l, (FRect){835.0, 358.0, 160.0, 36.0});
+    add_bay_walls(l, 512.0, 120.0);
+    add_unstable_zone(l, (FRect){585.0, 126.0, 185.0, 526.0}, 4.0);
+    set_star(l, 0, 330.0, 420.0, 23.0);
+    set_star(l, 1, 660.0, 452.0, 23.0);
+    set_star(l, 2, 910.0, 500.0, 23.0);
 
     l = &game->levels[4];
-    l->name = "Level 5: Triple Pendulum Training";
-    l->objective = "Triple pendulum: slow is smooth.";
-    l->hint = "Three cable segments create chaotic lag. Long time limit: breathe and settle.";
-    l->timeLimit = 210.0;
+    l->name = "Level 5: Triple Pendulum Height Puzzle";
+    l->objective = "Triple pendulum: low, lift, low, calm.";
+    l->hint = "Plan cable changes early. Sudden height changes wake every link.";
+    l->timeLimit = 150.0;
     l->startTrolleyX = 150.0;
     l->startCableLength = 360.0;
     l->startTheta = 0.018;
-    l->targetBase = (FRect){820.0, 552.0, 330.0, 82.0};
-    l->stableSpeedLimit = 58.0;
+    l->targetBase = (FRect){1020.0, 552.0, 120.0, 82.0};
+    l->stableSpeedLimit = 28.0;
     l->stableAngleLimit = 0.17;
     l->stableOmegaLimit = 0.58;
-    l->lowTargetRatio = 0.45;
+    l->safeChainMotion = 95.0;
+    l->requiredHoldTime = 3.5;
+    l->lowTargetRatio = 0.58;
     l->pendulumMode = PENDULUM_TRIPLE;
-    l->dampingScale = 1.14;
-    l->obstacles[0] = (FRect){545.0, 365.0, 175.0, 34.0};
-    l->obstacleCount = 1;
+    l->dampingScale = 1.10;
+    add_obstacle(l, (FRect){245.0, 335.0, 300.0, 36.0});
+    add_obstacle(l, (FRect){575.0, 500.0, 125.0, 84.0});
+    add_obstacle(l, (FRect){730.0, 340.0, 255.0, 36.0});
+    add_obstacle(l, (FRect){905.0, 502.0, 66.0, 82.0});
+    add_bay_walls(l, 512.0, 120.0);
+    set_star(l, 0, 380.0, 420.0, 23.0);
+    set_star(l, 1, 640.0, 452.0, 23.0);
+    set_star(l, 2, 952.0, 430.0, 23.0);
 
     l = &game->levels[5];
     l->name = "Level 6: Triple Pendulum Final Exam";
-    l->objective = "Triple pendulum: final precision bay.";
-    l->hint = "Tight route, low ceiling, narrow fragile bay. Smooth motion wins.";
-    l->timeLimit = 185.0;
+    l->objective = "Triple pendulum: boss route and fragile bay.";
+    l->hint = "Low ceiling, lift block, unstable bridge, slot, and strict chain calm.";
+    l->timeLimit = 165.0;
     l->startTrolleyX = 155.0;
     l->startCableLength = 375.0;
     l->startTheta = -0.018;
-    l->targetBase = (FRect){960.0, 552.0, 195.0, 82.0};
-    l->stableSpeedLimit = 34.0;
+    l->targetBase = (FRect){1070.0, 552.0, 90.0, 82.0};
+    l->stableSpeedLimit = 22.0;
     l->stableAngleLimit = 0.10;
     l->stableOmegaLimit = 0.36;
-    l->lowTargetRatio = 0.56;
+    l->safeChainMotion = 65.0;
+    l->requiredHoldTime = 4.0;
+    l->lowTargetRatio = 0.60;
     l->cargoKind = CARGO_FRAGILE;
     l->pendulumMode = PENDULUM_TRIPLE;
     l->dampingScale = 1.08;
-    l->obstacles[0] = (FRect){250.0, 318.0, 610.0, 34.0};
-    l->obstacles[1] = (FRect){450.0, 494.0, 118.0, 78.0};
-    l->obstacles[2] = (FRect){705.0, 432.0, 132.0, 44.0};
-    l->obstacles[3] = (FRect){880.0, 350.0, 245.0, 34.0};
-    l->obstacleCount = 4;
+    add_obstacle(l, (FRect){220.0, 326.0, 310.0, 36.0});
+    add_obstacle(l, (FRect){548.0, 500.0, 120.0, 86.0});
+    add_obstacle(l, (FRect){745.0, 310.0, 255.0, 36.0});
+    add_obstacle(l, (FRect){800.0, 500.0, 90.0, 88.0});
+    add_obstacle(l, (FRect){900.0, 362.0, 130.0, 34.0});
+    add_obstacle(l, (FRect){960.0, 496.0, 60.0, 86.0});
+    add_bay_walls(l, 512.0, 120.0);
+    add_unstable_zone(l, (FRect){665.0, 126.0, 170.0, 526.0}, 4.0);
+    set_star(l, 0, 355.0, 414.0, 22.0);
+    set_star(l, 1, 735.0, 454.0, 22.0);
+    set_star(l, 2, 1010.0, 455.0, 22.0);
 }
 
 static void update_cargo_position(Game *game) {
@@ -1195,6 +1292,44 @@ static int pendulum_mass_count(PendulumMode mode) {
     if (mode == PENDULUM_TRIPLE) return 3;
     if (mode == PENDULUM_DOUBLE) return 2;
     return 1;
+}
+
+static double level_hold_time(const Level *level) {
+    return level->requiredHoldTime > 0.0 ? level->requiredHoldTime : WIN_STABLE_SECONDS;
+}
+
+static int count_collected_stars(const Level *level) {
+    int i;
+    int count = 0;
+    for (i = 0; i < STAR_COUNT; ++i) {
+        if (level->stars[i].collected) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static int campaign_best_star_total(const Game *game) {
+    int i;
+    int total = 0;
+    for (i = 0; i < LEVEL_COUNT; ++i) {
+        total += game->bestStars[i];
+    }
+    return total;
+}
+
+static const char *operator_rank_for_stars(int stars) {
+    if (stars >= 3) return "Gold Operator";
+    if (stars == 2) return "Silver Operator";
+    if (stars == 1) return "Bronze Operator";
+    return "Delivery Complete";
+}
+
+static const char *campaign_rank_for_stars(int stars) {
+    if (stars >= 16) return "Master Crane Operator";
+    if (stars >= 11) return "Expert Operator";
+    if (stars >= 6) return "Licensed Operator";
+    return "Trainee";
 }
 
 static void sync_chain_lengths(Game *game) {
@@ -1262,6 +1397,7 @@ static void initialize_multi_pendulum(Game *game, const Level *level) {
 
 static void reset_level(Game *game, int levelIndex) {
     Level *level;
+    int i;
     if (levelIndex < 0) {
         levelIndex = 0;
     }
@@ -1282,7 +1418,18 @@ static void reset_level(Game *game, int levelIndex) {
     game->deliveryValid = 0;
     game->cargoInWind = 0;
     game->cargoInMagnet = 0;
+    game->chainTooMuchMotion = 0;
+    game->unstableZoneActive = 0;
+    game->unstableZoneTooLong = 0;
+    game->chainMotion = 0.0;
+    game->unstableZoneTimer = 0.0;
+    game->starMessageTimer = 0.0;
+    game->lastStarsCollected = 0;
+    game->lastCompletionTime = 0.0;
     game->lossReason = LOSS_NONE;
+    for (i = 0; i < STAR_COUNT; ++i) {
+        level->stars[i].collected = 0;
+    }
     game->trolley.x = level->startTrolleyX;
     game->trolley.velocity = 0.0;
     game->trolley.acceleration = 0.0;
@@ -1416,23 +1563,75 @@ static int cargo_hits_any_obstacle(const Game *game) {
     return 0;
 }
 
+static void update_star_collection(Game *game) {
+    Level *level = &game->levels[game->selectedLevel];
+    int i;
+    for (i = 0; i < STAR_COUNT; ++i) {
+        StarCollectible *star = &level->stars[i];
+        double dx = game->cargo.x - star->x;
+        double dy = game->cargo.y - star->y;
+        double pickupRadius = star->radius + 12.0;
+        if (!star->collected && dx * dx + dy * dy <= pickupRadius * pickupRadius) {
+            star->collected = 1;
+            game->starMessageTimer = 1.35;
+        }
+    }
+}
+
+static void update_unstable_zones(Game *game, double dt) {
+    const Level *level = &game->levels[game->selectedLevel];
+    int i;
+    int active = 0;
+    double limit = 0.0;
+
+    for (i = 0; i < level->unstableZoneCount; ++i) {
+        const UnstableZone *zone = &level->unstableZones[i];
+        if (point_in_frect(game->cargo.x, game->cargo.y, zone->rect)
+            || point_in_frect(game->trolley.x, PIVOT_Y, zone->rect)) {
+            active = 1;
+            limit = zone->timeLimit;
+            break;
+        }
+    }
+
+    game->unstableZoneActive = active;
+    game->unstableZoneTooLong = 0;
+    if (!active) {
+        game->unstableZoneTimer = 0.0;
+        return;
+    }
+
+    game->unstableZoneTimer += dt;
+    if (limit > 0.0 && game->unstableZoneTimer >= limit) {
+        game->unstableZoneTooLong = 1;
+        game->state = STATE_LOSE;
+        game->lossReason = LOSS_UNSTABLE;
+        game->loseIndex = 0;
+    }
+}
+
 static void update_stability_and_win(Game *game, double dt) {
     const Level *level = &game->levels[game->selectedLevel];
     FRect target = current_target_rect(game);
+    double holdTime = level_hold_time(level);
     double angleAbs = fabs(game->cargo.theta);
     double omegaAbs = fabs(game->cargo.omega);
     int insideX = game->cargo.x >= target.x + 18.0 && game->cargo.x <= target.x + target.w - 18.0;
     int insideY = game->cargo.y >= target.y + 20.0 && game->cargo.y <= target.y + target.h - 10.0;
     int lowEnough = game->cargo.y >= target.y + target.h * level->lowTargetRatio;
     int insideTarget = insideX && insideY && lowEnough;
-    int stable = angleAbs < level->stableAngleLimit
-              && omegaAbs < level->stableOmegaLimit
-              && game->cargo.speed < level->stableSpeedLimit;
+    int speedOk = game->cargo.speed < level->stableSpeedLimit;
+    int singleSwingOk = angleAbs < level->stableAngleLimit && omegaAbs < level->stableOmegaLimit;
+    int chainOk = level->pendulumMode == PENDULUM_SINGLE
+                || level->safeChainMotion <= 0.0
+                || game->chainMotion < level->safeChainMotion;
+    int stable = speedOk && (level->pendulumMode == PENDULUM_SINGLE ? singleSwingOk : chainOk);
 
     game->cargoInDeliveryZone = insideX && insideY;
     game->cargoTooHigh = insideX && insideY && !lowEnough;
-    game->cargoTooFast = insideTarget && game->cargo.speed >= level->stableSpeedLimit;
-    game->cargoTooMuchSwing = insideTarget && (angleAbs >= level->stableAngleLimit || omegaAbs >= level->stableOmegaLimit);
+    game->cargoTooFast = insideTarget && !speedOk;
+    game->chainTooMuchMotion = insideTarget && level->pendulumMode != PENDULUM_SINGLE && !chainOk;
+    game->cargoTooMuchSwing = insideTarget && level->pendulumMode == PENDULUM_SINGLE && !singleSwingOk;
     game->deliveryValid = insideTarget && stable;
 
     if (game->deliveryValid) {
@@ -1441,7 +1640,13 @@ static void update_stability_and_win(Game *game, double dt) {
         game->stableTimer = 0.0;
     }
 
-    if (game->stableTimer >= WIN_STABLE_SECONDS) {
+    if (game->stableTimer >= holdTime) {
+        int stars = count_collected_stars(level);
+        game->lastStarsCollected = stars;
+        game->lastCompletionTime = level->timeLimit - game->timeLeft;
+        if (stars > game->bestStars[game->selectedLevel]) {
+            game->bestStars[game->selectedLevel] = stars;
+        }
         game->state = STATE_WIN;
         game->winIndex = 0;
     }
@@ -1578,6 +1783,12 @@ static void update_multi_pendulum(Game *game, const Level *level, double dt) {
     update_cargo_from_chain(game);
     game->cargo.speed = sqrt((game->cargo.x - oldCargoX) * (game->cargo.x - oldCargoX)
                            + (game->cargo.y - oldCargoY) * (game->cargo.y - oldCargoY)) / dt;
+    game->chainMotion = 0.0;
+    for (i = 0; i < game->chain.massCount; ++i) {
+        double vx = (game->chain.masses[i].x - game->chain.masses[i].prevX) / dt;
+        double vy = (game->chain.masses[i].y - game->chain.masses[i].prevY) / dt;
+        game->chainMotion += sqrt(vx * vx + vy * vy);
+    }
     game->cargo.prevX = game->cargo.x;
     game->cargo.prevY = game->cargo.y;
     game->cargo.theta = atan2(game->cargo.x - game->trolley.x, game->cargo.y - PIVOT_Y);
@@ -1605,6 +1816,12 @@ static void update_physics(Game *game, double dt) {
 
     game->timeLeft -= dt;
     game->levelElapsed += dt;
+    if (game->starMessageTimer > 0.0) {
+        game->starMessageTimer -= dt;
+        if (game->starMessageTimer < 0.0) {
+            game->starMessageTimer = 0.0;
+        }
+    }
     if (game->timeLeft <= 0.0) {
         game->timeLeft = 0.0;
         game->state = STATE_LOSE;
@@ -1668,6 +1885,13 @@ static void update_physics(Game *game, double dt) {
         game->cargo.prevY = newCargoY;
         game->cargo.x = newCargoX;
         game->cargo.y = newCargoY;
+        game->chainMotion = game->cargo.speed;
+    }
+
+    update_star_collection(game);
+    update_unstable_zones(game, dt);
+    if (game->state != STATE_PLAYING) {
+        return;
     }
 
     if (fabs(game->cargo.theta) > MAX_SWING_RADIANS) {
@@ -1988,10 +2212,12 @@ static void drawBackground(App *app) {
 static void draw_hud(App *app, const Game *game) {
     char buffer[160];
     const Level *level = &game->levels[game->selectedLevel];
-    double stableFraction = game->stableTimer / WIN_STABLE_SECONDS;
+    double holdTime = level_hold_time(level);
+    double stableFraction = game->stableTimer / holdTime;
     SDL_Color progressColor = game->deliveryValid ? color_rgba(89, 226, 116, 255) : color_rgba(172, 64, 57, 255);
     SDL_Color text = color_rgba(236, 245, 246, 255);
     SDL_Color muted = color_rgba(177, 207, 211, 255);
+    int stars = count_collected_stars(level);
 
     draw_panel(app, (FRect){0, 0, LOGICAL_W, HUD_H}, color_rgba(25, 47, 58, 245), color_rgba(65, 96, 110, 255));
     fill_rect(app, (FRect){0, 64, LOGICAL_W, 28}, color_rgba(18, 36, 45, 235));
@@ -2006,14 +2232,29 @@ static void draw_hud(App *app, const Game *game) {
     snprintf(buffer, sizeof(buffer), "Speed %04.0f", game->cargo.speed);
     draw_text(app, app->fontSmall, buffer, 875, 15, text);
 
-    snprintf(buffer, sizeof(buffer), "Hold steady: %.1f / 3.0 s", game->stableTimer);
+    snprintf(buffer, sizeof(buffer), "Hold steady: %.1f / %.1f s", game->stableTimer, holdTime);
     draw_text(app, app->fontSmall, buffer, 1010, 10, game->deliveryValid ? color_rgba(144, 244, 157, 255) : text);
     draw_progress_bar(app, (FRect){1010, 35, 225, 16}, stableFraction, progressColor, color_rgba(92, 128, 123, 255));
 
     snprintf(buffer, sizeof(buffer), "Objective: %s", level->objective);
     draw_text(app, app->fontSmall, buffer, 24, 70, muted);
-    if (game->cargoTooFast) {
+    snprintf(buffer, sizeof(buffer), "Stars %d/%d", stars, STAR_COUNT);
+    draw_text(app, app->fontSmall, buffer, 610, 70, color_rgba(255, 220, 92, 255));
+    if (level->pendulumMode != PENDULUM_SINGLE) {
+        snprintf(buffer, sizeof(buffer), "Chain %.0f/%.0f", game->chainMotion, level->safeChainMotion);
+        draw_text(app, app->fontSmall, buffer, 710, 70,
+                  game->chainTooMuchMotion ? color_rgba(255, 205, 104, 255) : color_rgba(177, 207, 211, 255));
+    }
+    if (game->unstableZoneActive) {
+        double limit = level->unstableZoneCount > 0 ? level->unstableZones[0].timeLimit : 4.0;
+        snprintf(buffer, sizeof(buffer), "Keep moving %.1f/%.1f", game->unstableZoneTimer, limit);
+        draw_text(app, app->fontSmall, buffer, 1000, 70, color_rgba(255, 224, 88, 255));
+    } else if (game->starMessageTimer > 0.0) {
+        draw_text(app, app->fontSmall, "Star collected!", 1010, 70, color_rgba(255, 220, 92, 255));
+    } else if (game->cargoTooFast) {
         draw_text(app, app->fontSmall, "Too fast", 1030, 70, color_rgba(255, 205, 104, 255));
+    } else if (game->chainTooMuchMotion) {
+        draw_text(app, app->fontSmall, "Chain still moving", 982, 70, color_rgba(255, 205, 104, 255));
     } else if (game->cargoTooMuchSwing) {
         draw_text(app, app->fontSmall, "Too much swing", 1010, 70, color_rgba(255, 205, 104, 255));
     } else if (game->cargoTooHigh) {
@@ -2079,7 +2320,9 @@ static void drawDeliveryBay(App *app, FRect target, int moving, double time) {
 
 static void drawDeliveryProgressNearTarget(App *app, const Game *game, FRect target) {
     char buffer[64];
-    double fraction = game->stableTimer / WIN_STABLE_SECONDS;
+    const Level *level = &game->levels[game->selectedLevel];
+    double holdTime = level_hold_time(level);
+    double fraction = game->stableTimer / holdTime;
     FRect nearTarget = {target.x - 115.0, target.y - 95.0, target.w + 230.0, target.h + 145.0};
     FRect bar = {target.x, target.y - 44.0, target.w, 16.0};
     SDL_Color fill = game->deliveryValid ? color_rgba(86, 229, 111, 255) : color_rgba(199, 67, 58, 255);
@@ -2090,11 +2333,12 @@ static void drawDeliveryProgressNearTarget(App *app, const Game *game, FRect tar
     }
 
     if (game->cargoTooFast) status = "Too fast";
+    else if (game->chainTooMuchMotion) status = "Chain moving";
     else if (game->cargoTooMuchSwing) status = "Too much swing";
     else if (game->cargoTooHigh) status = "Lower cargo";
     else if (!game->cargoInDeliveryZone) status = "Enter bay";
 
-    snprintf(buffer, sizeof(buffer), "%s: %.1f / 3.0 s", status, game->stableTimer);
+    snprintf(buffer, sizeof(buffer), "%s: %.1f / %.1f s", status, game->stableTimer, holdTime);
     draw_text_center(app, app->fontSmall, buffer, (int)(target.x + target.w * 0.5), (int)(target.y - 66.0),
                      game->deliveryValid ? color_rgba(26, 92, 45, 255) : color_rgba(96, 46, 36, 255));
     draw_progress_bar(app, bar, fraction, fill, color_rgba(50, 72, 65, 255));
@@ -2127,6 +2371,66 @@ static void draw_obstacles(App *app, const Level *level) {
     for (i = 0; i < level->obstacleCount; ++i) {
         const char *label = (level->obstacles[i].h <= 48.0) ? "LOW CLEARANCE" : "BARRIER";
         drawSteelBeam(app, level->obstacles[i], label);
+    }
+}
+
+static void drawUnstableZones(App *app, const Level *level) {
+    int i;
+    for (i = 0; i < level->unstableZoneCount; ++i) {
+        const UnstableZone *zone = &level->unstableZones[i];
+        int stripe;
+        fill_rect(app, zone->rect, color_rgba(255, 202, 50, 26));
+        outline_rect(app, zone->rect, color_rgba(255, 210, 68, 190));
+        for (stripe = (int)zone->rect.x - 80; stripe < (int)(zone->rect.x + zone->rect.w + 80); stripe += 36) {
+            draw_thick_line(app, (double)stripe, zone->rect.y + 8.0,
+                            (double)stripe + 72.0, zone->rect.y + zone->rect.h - 8.0,
+                            3, color_rgba(42, 38, 28, 135));
+        }
+        draw_text_center(app, app->fontSmall, "UNSTABLE ZONE",
+                         (int)(zone->rect.x + zone->rect.w * 0.5),
+                         (int)(zone->rect.y + 18.0), color_rgba(64, 49, 14, 255));
+        draw_text_center(app, app->fontSmall, "KEEP MOVING",
+                         (int)(zone->rect.x + zone->rect.w * 0.5),
+                         (int)(zone->rect.y + zone->rect.h - 28.0), color_rgba(64, 49, 14, 255));
+    }
+}
+
+static void drawStarCollectible(App *app, const StarCollectible *star, double time) {
+    double pulse = star->collected ? 0.82 : 1.0 + 0.07 * sin(time * 4.2 + star->x * 0.013);
+    double outer = star->radius * pulse;
+    double inner = outer * 0.45;
+    double px[5];
+    double py[5];
+    int order[] = {0, 2, 4, 1, 3, 0};
+    int i;
+    SDL_Color fill = star->collected ? color_rgba(113, 102, 61, 80) : color_rgba(255, 219, 74, 255);
+    SDL_Color edge = star->collected ? color_rgba(90, 80, 48, 120) : color_rgba(209, 126, 28, 255);
+
+    for (i = 0; i < 5; ++i) {
+        double a = -M_PI * 0.5 + (double)i * (2.0 * M_PI / 5.0);
+        px[i] = star->x + cos(a) * outer;
+        py[i] = star->y + sin(a) * outer;
+    }
+
+    fill_circle(app, (int)star->x, (int)star->y, (int)(inner * 1.2), fill);
+    for (i = 0; i < 5; ++i) {
+        draw_thick_line(app, px[order[i]], py[order[i]], px[order[i + 1]], py[order[i + 1]],
+                        star->collected ? 2 : 3, edge);
+    }
+    for (i = 0; i < 5; ++i) {
+        draw_thick_line(app, star->x, star->y, px[i], py[i], star->collected ? 2 : 3, fill);
+    }
+    fill_circle(app, (int)(star->x - outer * 0.22), (int)(star->y - outer * 0.22),
+                star->collected ? 2 : 4, color_rgba(255, 250, 205, star->collected ? 75 : 220));
+    if (star->collected) {
+        draw_circle_outline(app, (int)star->x, (int)star->y, (int)(outer + 3.0), color_rgba(255, 221, 86, 70));
+    }
+}
+
+static void drawStars(App *app, const Level *level, double time) {
+    int i;
+    for (i = 0; i < STAR_COUNT; ++i) {
+        drawStarCollectible(app, &level->stars[i], time);
     }
 }
 
@@ -2535,11 +2839,13 @@ static void draw_level_world(App *app, const Game *game) {
     int i;
     drawBackground(app);
     drawMovingDockTrack(app, level);
+    drawUnstableZones(app, level);
     drawDeliveryBay(app, target, level->targetAxis != AXIS_NONE ? 1 : 0, game->levelElapsed);
     for (i = 0; i < level->windZoneCount; ++i) {
         drawWindZone(app, level->windZones[i], game->levelElapsed);
     }
     draw_obstacles(app, level);
+    drawStars(app, level, game->levelElapsed);
     for (i = 0; i < level->gateCount; ++i) {
         FRect gate = current_gate_rect(&level->gates[i], game->levelElapsed);
         drawMovingGate(app, &level->gates[i], gate, game->levelElapsed);
@@ -2640,26 +2946,30 @@ static void draw_how_to_play(App *app, const Game *game) {
 
     draw_text(app, app->fontSmall, "Physics", 305, 374, gold);
     draw_text(app, app->fontSmall, "The crate behaves like a pendulum. Sudden trolley acceleration", 330, 398, text);
-    draw_text(app, app->fontSmall, "creates swing; later levels add double and triple linked cargo.", 330, 420, text);
+    draw_text(app, app->fontSmall, "creates swing; double/triple levels also check chain motion.", 330, 420, text);
 
     draw_text(app, app->fontSmall, "Tips", 305, 462, gold);
-    draw_text(app, app->fontSmall, "Move smoothly. Multi-link cargo rewards tiny inputs and patience.", 330, 486, text);
+    draw_text(app, app->fontSmall, "Stars are optional. Yellow unstable zones must be crossed quickly.", 330, 486, text);
     drawButton(app, game, how_to_play_back_rect(), "Back", mouse_over_rect(game, how_to_play_back_rect()), 0);
     draw_text_center(app, app->fontSmall, "Enter or ESC also returns", LOGICAL_W / 2, 596, color_rgba(178, 208, 212, 255));
 }
 
 static void draw_level_select(App *app, const Game *game) {
     int i;
+    char buffer[48];
     draw_menu_scene(app);
     drawMenuPanel(app, (FRect){105, 80, 1070, 540}, color_rgba(25, 47, 58, 245), color_rgba(91, 123, 137, 255));
     draw_text_center(app, app->fontLarge, "Level Select", LOGICAL_W / 2, 105, color_rgba(255, 212, 96, 255));
-    draw_text_center(app, app->fontSmall, "All 6 levels are unlocked for quick testing.", LOGICAL_W / 2, 143, color_rgba(178, 208, 212, 255));
+    snprintf(buffer, sizeof(buffer), "All 6 unlocked   Best Stars %d/%d", campaign_best_star_total(game), CAMPAIGN_STAR_TOTAL);
+    draw_text_center(app, app->fontSmall, buffer, LOGICAL_W / 2, 143, color_rgba(178, 208, 212, 255));
     for (i = 0; i < LEVEL_COUNT; ++i) {
         FRect tile = level_select_button_rect(i);
         SDL_Color text = (game->levelIndex == i) ? color_rgba(35, 39, 41, 255) : color_rgba(236, 244, 244, 255);
         drawButton(app, game, tile, "", game->levelIndex == i, 1);
         draw_text(app, app->fontSmall, game->levels[i].name, (int)tile.x + 20, (int)tile.y + 9, text);
         draw_text(app, app->fontSmall, game->levels[i].objective, (int)tile.x + 20, (int)tile.y + 34, text);
+        snprintf(buffer, sizeof(buffer), "Best %d/%d", game->bestStars[i], STAR_COUNT);
+        draw_text(app, app->fontSmall, buffer, (int)(tile.x + tile.w - 94.0), (int)tile.y + 9, text);
     }
     drawButton(app, game, level_select_back_rect(), "Back", mouse_over_rect(game, level_select_back_rect()), 0);
     draw_text_center(app, app->fontSmall, "Arrows or 1-6 to choose    Enter to start    ESC for menu", LOGICAL_W / 2, 606, color_rgba(178, 208, 212, 255));
@@ -2686,6 +2996,7 @@ static const char *loss_reason_text(LossReason reason) {
     if (reason == LOSS_TIMEOUT) return "Time ran out.";
     if (reason == LOSS_COLLISION) return "Cargo hit a beam or ceiling.";
     if (reason == LOSS_SWING) return "Swing angle became unsafe.";
+    if (reason == LOSS_UNSTABLE) return "Stayed too long in an unstable zone.";
     return "Delivery failed.";
 }
 
@@ -2697,15 +3008,27 @@ static void draw_win(App *app, const Game *game) {
         "Main Menu"
     };
     int i;
+    char buffer[96];
+    int totalStars = campaign_best_star_total(game);
     draw_level_world(app, game);
     draw_overlay(app);
-    drawMenuPanel(app, (FRect){375, 170, 530, 390}, color_rgba(22, 67, 46, 250), color_rgba(111, 212, 132, 255));
-    draw_text_center(app, app->fontLarge, "Delivery Complete", LOGICAL_W / 2, 222, color_rgba(198, 255, 196, 255));
-    draw_text_center(app, app->font, "Stable cargo held for 3 continuous seconds.", LOGICAL_W / 2, 270, color_rgba(236, 247, 236, 255));
+    drawMenuPanel(app, (FRect){375, 150, 530, 435}, color_rgba(22, 67, 46, 250), color_rgba(111, 212, 132, 255));
+    draw_text_center(app, app->fontLarge, "Delivery Successful!", LOGICAL_W / 2, 186, color_rgba(198, 255, 196, 255));
+    snprintf(buffer, sizeof(buffer), "Stars collected: %d / %d", game->lastStarsCollected, STAR_COUNT);
+    draw_text_center(app, app->font, buffer, LOGICAL_W / 2, 232, color_rgba(255, 229, 122, 255));
+    snprintf(buffer, sizeof(buffer), "Rank: %s", operator_rank_for_stars(game->lastStarsCollected));
+    draw_text_center(app, app->fontSmall, buffer, LOGICAL_W / 2, 264, color_rgba(236, 247, 236, 255));
+    snprintf(buffer, sizeof(buffer), "Completion time: %.1f s", game->lastCompletionTime);
+    draw_text_center(app, app->fontSmall, buffer, LOGICAL_W / 2, 286, color_rgba(207, 242, 211, 255));
+    if (game->selectedLevel + 1 >= LEVEL_COUNT) {
+        snprintf(buffer, sizeof(buffer), "Total Stars: %d / %d    Campaign Rank: %s",
+                 totalStars, CAMPAIGN_STAR_TOTAL, campaign_rank_for_stars(totalStars));
+        draw_text_center(app, app->fontSmall, buffer, LOGICAL_W / 2, 310, color_rgba(255, 229, 122, 255));
+    }
     for (i = 0; i < 4; ++i) {
         drawButton(app, game, win_button_rect(i), options[i], game->winIndex == i, 0);
     }
-    draw_text_center(app, app->fontSmall, "Enter/N next    R replay    L level select    M main menu", LOGICAL_W / 2, 528, color_rgba(207, 242, 211, 255));
+    draw_text_center(app, app->fontSmall, "Enter/N next    R replay    L level select    M main menu", LOGICAL_W / 2, 552, color_rgba(207, 242, 211, 255));
 }
 
 static void draw_lose(App *app, const Game *game) {
