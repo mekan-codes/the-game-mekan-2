@@ -1,0 +1,17 @@
+{
+  "id": "hydraulic_crusher",
+  "type": "mechanism",
+  "sheet_clean": "assets/sheets_clean/hydraulic_crusher_sheet_clean.png",
+  "frames_clean_dir": "assets/frames_clean/hydraulic_crusher",
+  "frame_pattern": "hydraulic_crusher_00.png ... hydraulic_crusher_07.png",
+  "frame_count": 8,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 10,
+  "anchor": "bottom_center",
+  "recommended_screen_size": [
+    140,
+    170
+  ],
+  "hitbox_guidance": "Frame collider plus press-head damage collider only."
+}

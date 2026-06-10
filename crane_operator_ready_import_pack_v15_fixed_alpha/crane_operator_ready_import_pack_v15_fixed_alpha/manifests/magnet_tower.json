@@ -1,0 +1,17 @@
+{
+  "id": "magnet_tower",
+  "type": "mechanism",
+  "sheet_clean": "assets/sheets_clean/magnet_tower_sheet_clean.png",
+  "frames_clean_dir": "assets/frames_clean/magnet_tower",
+  "frame_pattern": "magnet_tower_00.png ... magnet_tower_07.png",
+  "frame_count": 8,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 10,
+  "anchor": "bottom_center",
+  "recommended_screen_size": [
+    95,
+    150
+  ],
+  "hitbox_guidance": "Tower body collider only; magnetic radius is separate non-collision gameplay zone."
+}

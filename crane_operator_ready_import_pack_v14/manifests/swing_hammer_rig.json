@@ -1,0 +1,25 @@
+{
+  "id": "swing_hammer_rig",
+  "type": "mechanism",
+  "sheet_file": "assets/sheets/swing_hammer_rig_sheet.png",
+  "frames_dir": "assets/frames/swing_hammer_rig",
+  "frame_files": [
+    "assets/frames/swing_hammer_rig/swing_hammer_rig_00.png",
+    "assets/frames/swing_hammer_rig/swing_hammer_rig_01.png",
+    "assets/frames/swing_hammer_rig/swing_hammer_rig_02.png",
+    "assets/frames/swing_hammer_rig/swing_hammer_rig_03.png",
+    "assets/frames/swing_hammer_rig/swing_hammer_rig_04.png",
+    "assets/frames/swing_hammer_rig/swing_hammer_rig_05.png",
+    "assets/frames/swing_hammer_rig/swing_hammer_rig_06.png",
+    "assets/frames/swing_hammer_rig/swing_hammer_rig_07.png"
+  ],
+  "frame_count": 8,
+  "sheet_width": 2172,
+  "sheet_height": 724,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 10,
+  "loop": true,
+  "anchor": "top_center",
+  "collision_guidance": "Collision should use the hammer head and optionally chain/rod, not the transparent frame."
+}

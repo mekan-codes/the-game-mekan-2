@@ -1,0 +1,17 @@
+{
+  "id": "swing_hammer_rig",
+  "type": "mechanism",
+  "sheet_clean": "assets/sheets_clean/swing_hammer_rig_sheet_clean.png",
+  "frames_clean_dir": "assets/frames_clean/swing_hammer_rig",
+  "frame_pattern": "swing_hammer_rig_00.png ... swing_hammer_rig_07.png",
+  "frame_count": 8,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 10,
+  "anchor": "top_center",
+  "recommended_screen_size": [
+    170,
+    150
+  ],
+  "hitbox_guidance": "Collider on hammer head and optionally rod/chain."
+}

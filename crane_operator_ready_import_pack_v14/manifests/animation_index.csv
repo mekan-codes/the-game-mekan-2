@@ -1,0 +1,11 @@
+id,type,sheet_file,frames_dir,frame_count,frame_width,frame_height,fps,loop,anchor,collision_guidance
+magnet_tower,mechanism,assets/sheets/magnet_tower_sheet.png,assets/frames/magnet_tower,8,543,362,10,true,bottom_center,"Use collider only on the solid tower body and base. Magnetic radius is separate gameplay logic, not collision."
+magnetic_field_effect,effect,assets/sheets/magnetic_field_effect_sheet.png,assets/frames/magnetic_field_effect,8,543,362,14,true,center,No collision. Pure overlay VFX aligned to the magnet tower emitter center.
+twin_turbine_fan,mechanism,assets/sheets/twin_turbine_fan_sheet.png,assets/frames/twin_turbine_fan,8,543,362,12,true,bottom_center,Collider only on the machine body. Wind zone is separate gameplay logic.
+wind_gust_effect,effect,assets/sheets/wind_gust_effect_sheet.png,assets/frames/wind_gust_effect,8,543,362,14,true,center_left,No collision. Repeat or stretch inside wind zones.
+hydraulic_crusher,mechanism,assets/sheets/hydraulic_crusher_sheet.png,assets/frames/hydraulic_crusher,8,543,362,10,true,bottom_center,Collider on the machine frame body. Damage only on the descending press head and crush lane.
+extendable_bridge,mechanism,assets/sheets/extendable_bridge_sheet.png,assets/frames/extendable_bridge,8,543,362,10,true,left_mount,Collider only on visible bridge body and top walkable surface. Do not use transparent frame area.
+laser_gate,mechanism,assets/sheets/laser_gate_sheet.png,assets/frames/laser_gate,8,543,362,12,true,center,"Pillar colliders always active. Beam collider only active when the beam is visually on, and it should be narrow."
+rotating_sweeper_arm,mechanism,assets/sheets/rotating_sweeper_arm_sheet.png,assets/frames/rotating_sweeper_arm,8,543,362,10,true,pivot_center,Damage/collision follows the visible arm and tip. Keep pivot fixed. Do not use the full frame rectangle.
+swing_hammer_rig,mechanism,assets/sheets/swing_hammer_rig_sheet.png,assets/frames/swing_hammer_rig,8,543,362,10,true,top_center,"Collision should use the hammer head and optionally chain/rod, not the transparent frame."
+moving_dock,mechanism,assets/sheets/moving_dock_sheet.png,assets/frames/moving_dock,8,543,362,8,true,bottom_center,Landing and collision should use the visible deck only. Delivery zone should match the visible safe area you place on top.

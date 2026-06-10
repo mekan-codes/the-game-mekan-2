@@ -1,0 +1,11 @@
+id,type,sheet_clean,frames_clean_dir,frame_count,frame_width,frame_height,fps,anchor,recommended_screen_size,hitbox_guidance
+magnet_tower,mechanism,assets/sheets_clean/magnet_tower_sheet_clean.png,assets/frames_clean/magnet_tower,8,543,362,10,bottom_center,"[95, 150]",Tower body collider only; magnetic radius is separate non-collision gameplay zone.
+magnetic_field_effect,effect,assets/sheets_clean/magnetic_field_effect_sheet_clean.png,assets/frames_clean/magnetic_field_effect,8,543,362,14,center,"[260, 200]",Pure VFX overlay; no collision.
+twin_turbine_fan,mechanism,assets/sheets_clean/twin_turbine_fan_sheet_clean.png,assets/frames_clean/twin_turbine_fan,8,543,362,12,bottom_center,"[130, 95]",Fan machine body collider only; wind zone separate.
+wind_gust_effect,effect,assets/sheets_clean/wind_gust_effect_sheet_clean.png,assets/frames_clean/wind_gust_effect,8,543,362,14,center_left,"[230, 85]",Pure VFX overlay; no collision.
+hydraulic_crusher,mechanism,assets/sheets_clean/hydraulic_crusher_sheet_clean.png,assets/frames_clean/hydraulic_crusher,8,543,362,10,bottom_center,"[140, 170]",Frame collider plus press-head damage collider only.
+extendable_bridge,mechanism,assets/sheets_clean/extendable_bridge_sheet_clean.png,assets/frames_clean/extendable_bridge,8,543,362,10,left_mount,"[190, 70]",Collide only with visible bridge surface and mount body.
+laser_gate,mechanism,assets/sheets_clean/laser_gate_sheet_clean.png,assets/frames_clean/laser_gate,8,543,362,12,center,"[150, 120]",Pillar colliders always active; beam collider only when visible and narrow.
+rotating_sweeper_arm,mechanism,assets/sheets_clean/rotating_sweeper_arm_sheet_clean.png,assets/frames_clean/rotating_sweeper_arm,8,543,362,10,pivot_center,"[115, 90]",Collider follows visible arm and saw tip; not full frame.
+swing_hammer_rig,mechanism,assets/sheets_clean/swing_hammer_rig_sheet_clean.png,assets/frames_clean/swing_hammer_rig,8,543,362,10,top_center,"[170, 150]",Collider on hammer head and optionally rod/chain.
+moving_dock,mechanism,assets/sheets_clean/moving_dock_sheet_clean.png,assets/frames_clean/moving_dock,8,543,362,8,bottom_center,"[260, 85]",Landing/delivery zone should match visible deck only.

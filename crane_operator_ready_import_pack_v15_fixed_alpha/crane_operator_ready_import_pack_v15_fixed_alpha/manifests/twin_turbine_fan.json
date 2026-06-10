@@ -1,0 +1,17 @@
+{
+  "id": "twin_turbine_fan",
+  "type": "mechanism",
+  "sheet_clean": "assets/sheets_clean/twin_turbine_fan_sheet_clean.png",
+  "frames_clean_dir": "assets/frames_clean/twin_turbine_fan",
+  "frame_pattern": "twin_turbine_fan_00.png ... twin_turbine_fan_07.png",
+  "frame_count": 8,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 12,
+  "anchor": "bottom_center",
+  "recommended_screen_size": [
+    130,
+    95
+  ],
+  "hitbox_guidance": "Fan machine body collider only; wind zone separate."
+}

@@ -1,0 +1,127 @@
+MODEL TO USE: GPT-5.5 Extensive
+
+Continue from my existing SDL2 C game:
+Crane Operator: Safe Cargo Delivery
+
+Use the attached ready-to-import asset package folder exactly as provided.
+Do NOT rewrite the whole game.
+Preserve the working crane physics, menus, fullscreen, level flow, and existing mission logic.
+The goal is to replace crude placeholder mechanism animations and visual hacks with proper animated assets from this pack.
+
+PACKAGE STRUCTURE YOU MUST USE
+- assets/sheets/
+- assets/frames/
+- manifests/animation_pack_manifest.json
+- manifests/*.json
+- manifests/animation_index.csv
+
+VERY IMPORTANT
+This package is already prepared for import:
+- every animation exists as a full sheet
+- every animation is already sliced into frame-by-frame PNGs
+- manifests already contain frame size, fps suggestions, anchors, and collider guidance
+
+Your job is to integrate these assets cleanly and safely.
+
+WHAT TO IMPLEMENT
+1. Add or improve a reusable animated sprite system.
+2. Load animations from the provided package.
+3. Prefer loading the already-sliced frame PNGs from assets/frames/.
+4. Use the JSON manifest files instead of hardcoding filenames wherever practical.
+5. Replace crude placeholder visuals such as circles, rectangles, or debug-like motion indicators with the provided animated assets.
+6. Keep fallbacks only if a file fails to load.
+
+ASSETS TO INTEGRATE
+- magnet_tower
+- magnetic_field_effect
+- twin_turbine_fan
+- wind_gust_effect
+- hydraulic_crusher
+- extendable_bridge
+- laser_gate
+- rotating_sweeper_arm
+- swing_hammer_rig
+- moving_dock
+
+INTEGRATION RULES BY ASSET
+1. magnet_tower
+- use for the physical mechanism art
+- magnetic pull is gameplay logic, not collision
+- tower body collider only
+
+2. magnetic_field_effect
+- pure overlay VFX
+- no collision
+- align to magnet tower emitter center
+
+3. twin_turbine_fan
+- use for the fan machine
+- wind zone remains separate gameplay logic
+- collider only on visible machine body
+
+4. wind_gust_effect
+- pure wind overlay VFX
+- no collision
+- can be repeated/tiled in wind zones
+
+5. hydraulic_crusher
+- sync visual press motion with hazard timing
+- crusher damage only where the press head actually crushes
+- do not use a giant rectangular hitbox
+
+6. extendable_bridge
+- visible extension should match gameplay extension state
+- walkable/collidable area only on visible bridge surface and machine body
+
+7. laser_gate
+- beam collider only when beam is visually active
+- keep beam collider narrow and aligned to the visible beam
+- gate posts always collide
+
+8. rotating_sweeper_arm
+- keep pivot fixed
+- collider/damage follows the visible arm and tip, not the transparent frame
+
+9. swing_hammer_rig
+- keep top pivot fixed
+- collision mainly on the hammer head, optionally chain/rod
+
+10. moving_dock
+- use as the animated dock/platform
+- landing zone should match the visible deck area
+- preserve existing moving dock logic if already implemented
+
+HITBOX / COLLIDER RULES (CRITICAL)
+- never use full PNG boundaries as hitboxes
+- use visible object extents only
+- if needed, define manual collider offsets per asset type
+- effect overlays must never become colliders
+- invisible transparent space must not harm the player
+
+BACKGROUND / ALPHA RULES
+- these PNGs have transparent backgrounds
+- render with correct alpha blending
+- do not add ugly debug boxes in the final build
+- keep the existing level backgrounds intact
+
+USABILITY GOAL
+After integration, the game should feel neat and intentional.
+Mechanisms should animate properly instead of looking like moving circles, squares, or temporary editor markers.
+
+BEFORE FINAL RESPONSE, VERIFY
+- build succeeds
+- game launches
+- animations load correctly
+- if a file fails to load, fallback works
+- colliders are not too large
+- no bad background artifacts appear
+- animated mechanisms visibly replace placeholder visuals
+- existing gameplay still works
+
+FINAL RESPONSE FORMAT
+1. Files modified.
+2. Animated asset system added or updated.
+3. Assets integrated.
+4. Collider/hitbox tuning summary.
+5. Exact build/run command.
+6. Remaining issues or assumptions.

@@ -1,0 +1,17 @@
+{
+  "id": "magnetic_field_effect",
+  "type": "effect",
+  "sheet_clean": "assets/sheets_clean/magnetic_field_effect_sheet_clean.png",
+  "frames_clean_dir": "assets/frames_clean/magnetic_field_effect",
+  "frame_pattern": "magnetic_field_effect_00.png ... magnetic_field_effect_07.png",
+  "frame_count": 8,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 14,
+  "anchor": "center",
+  "recommended_screen_size": [
+    260,
+    200
+  ],
+  "hitbox_guidance": "Pure VFX overlay; no collision."
+}

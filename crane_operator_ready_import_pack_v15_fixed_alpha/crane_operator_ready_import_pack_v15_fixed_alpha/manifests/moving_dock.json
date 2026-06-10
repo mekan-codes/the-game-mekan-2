@@ -1,0 +1,17 @@
+{
+  "id": "moving_dock",
+  "type": "mechanism",
+  "sheet_clean": "assets/sheets_clean/moving_dock_sheet_clean.png",
+  "frames_clean_dir": "assets/frames_clean/moving_dock",
+  "frame_pattern": "moving_dock_00.png ... moving_dock_07.png",
+  "frame_count": 8,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 8,
+  "anchor": "bottom_center",
+  "recommended_screen_size": [
+    260,
+    85
+  ],
+  "hitbox_guidance": "Landing/delivery zone should match visible deck only."
+}

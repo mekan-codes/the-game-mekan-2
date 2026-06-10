@@ -1,0 +1,58 @@
+Monster level concepts for Crane Operator: Safe Cargo Delivery
+
+LEVEL 7 — MAGNETIC REACTOR RUN
+Mission:
+Carry the fragile precision cargo through a magnetic foundry lane and deliver it onto a moving dock.
+Core challenge:
+Two magnet towers create alternating attraction zones. If the crate enters the magnetic radius, it is pulled sideways and starts dangerous swing. The player must manage cable length, timing, and stabilizer use.
+Suggested mechanics:
+- Alternate left/right magnetic pull every few seconds.
+- A laser security gate opens only during a safe cycle.
+- Final drop must be onto the moving dock.
+Recommended assets:
+06_precision_fragile_cargo, 01_magnet_tower, 09_laser_security_gate, 04_moving_dock_heavy.
+Why it is hard:
+The player must control swing while the environment actively creates new swing.
+
+LEVEL 8 — CYCLONE CRUSHER GAUNTLET
+Mission:
+Move a heavy hazard container through turbine wind, across an extendable bridge, then under a hydraulic crusher and into the bay.
+Core challenge:
+Fans create strong gusts, the bridge appears only on a timed cycle, and the crusher opens/closes with a short safe window.
+Suggested mechanics:
+- Wind pulses stronger at higher cable length.
+- Bridge periodically extends and retracts.
+- Crusher instantly fails the run if mistimed.
+Recommended assets:
+05_heavy_hazard_container, 03_twin_turbine_fan, 08_extendable_bridge_platform, 07_hydraulic_crusher.
+Why it is hard:
+It combines movement timing, altitude choice, and precision delivery under pressure.
+
+LEVEL 9 — PENDULUM OF DOOM
+Mission:
+Thread the cargo through a rotating sweeper corridor while avoiding a giant swing hammer, then deliver cleanly.
+Core challenge:
+The sweeper arm keeps changing the safe corridor while the hammer punishes excessive waiting.
+Suggested mechanics:
+- Rotating sweeper arm with configurable angular speed.
+- Swing hammer rig moving on a timed arc or periodic release.
+- Narrow corridor before the target.
+Recommended assets:
+02_swing_hammer_rig, 10_rotating_sweeper_arm, 05_heavy_hazard_container or 06_precision_fragile_cargo.
+Why it is hard:
+The player must commit at the right time instead of slowly inching forward.
+
+LEVEL 10 — APEX FOUNDRY TRIAL
+Mission:
+Final monster level combining all mechanics.
+Core challenge:
+Start with wind, pass the magnet towers, wait for the laser gate, cross the extendable bridge, survive the crusher, then land softly on the moving dock.
+Suggested mechanics:
+- Short but fair timer.
+- Only one fragile cargo.
+- Slightly reduced safe speed threshold at delivery.
+- Multiple fail states but clear warning indicators.
+Recommended assets:
+01_magnet_tower, 03_twin_turbine_fan, 04_moving_dock_heavy, 06_precision_fragile_cargo, 07_hydraulic_crusher, 08_extendable_bridge_platform, 09_laser_security_gate.
+Why it is hard:
+It is a full exam of cable control, swing control, timing, and stable landing.

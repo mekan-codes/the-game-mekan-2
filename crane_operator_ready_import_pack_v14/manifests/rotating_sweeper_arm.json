@@ -1,0 +1,25 @@
+{
+  "id": "rotating_sweeper_arm",
+  "type": "mechanism",
+  "sheet_file": "assets/sheets/rotating_sweeper_arm_sheet.png",
+  "frames_dir": "assets/frames/rotating_sweeper_arm",
+  "frame_files": [
+    "assets/frames/rotating_sweeper_arm/rotating_sweeper_arm_00.png",
+    "assets/frames/rotating_sweeper_arm/rotating_sweeper_arm_01.png",
+    "assets/frames/rotating_sweeper_arm/rotating_sweeper_arm_02.png",
+    "assets/frames/rotating_sweeper_arm/rotating_sweeper_arm_03.png",
+    "assets/frames/rotating_sweeper_arm/rotating_sweeper_arm_04.png",
+    "assets/frames/rotating_sweeper_arm/rotating_sweeper_arm_05.png",
+    "assets/frames/rotating_sweeper_arm/rotating_sweeper_arm_06.png",
+    "assets/frames/rotating_sweeper_arm/rotating_sweeper_arm_07.png"
+  ],
+  "frame_count": 8,
+  "sheet_width": 2172,
+  "sheet_height": 724,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 10,
+  "loop": true,
+  "anchor": "pivot_center",
+  "collision_guidance": "Damage/collision follows the visible arm and tip. Keep pivot fixed. Do not use the full frame rectangle."
+}

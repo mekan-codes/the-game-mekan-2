@@ -1,0 +1,25 @@
+{
+  "id": "magnet_tower",
+  "type": "mechanism",
+  "sheet_file": "assets/sheets/magnet_tower_sheet.png",
+  "frames_dir": "assets/frames/magnet_tower",
+  "frame_files": [
+    "assets/frames/magnet_tower/magnet_tower_00.png",
+    "assets/frames/magnet_tower/magnet_tower_01.png",
+    "assets/frames/magnet_tower/magnet_tower_02.png",
+    "assets/frames/magnet_tower/magnet_tower_03.png",
+    "assets/frames/magnet_tower/magnet_tower_04.png",
+    "assets/frames/magnet_tower/magnet_tower_05.png",
+    "assets/frames/magnet_tower/magnet_tower_06.png",
+    "assets/frames/magnet_tower/magnet_tower_07.png"
+  ],
+  "frame_count": 8,
+  "sheet_width": 2172,
+  "sheet_height": 724,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 10,
+  "loop": true,
+  "anchor": "bottom_center",
+  "collision_guidance": "Use collider only on the solid tower body and base. Magnetic radius is separate gameplay logic, not collision."
+}

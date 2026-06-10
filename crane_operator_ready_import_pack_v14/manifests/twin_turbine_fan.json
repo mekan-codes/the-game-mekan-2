@@ -1,0 +1,25 @@
+{
+  "id": "twin_turbine_fan",
+  "type": "mechanism",
+  "sheet_file": "assets/sheets/twin_turbine_fan_sheet.png",
+  "frames_dir": "assets/frames/twin_turbine_fan",
+  "frame_files": [
+    "assets/frames/twin_turbine_fan/twin_turbine_fan_00.png",
+    "assets/frames/twin_turbine_fan/twin_turbine_fan_01.png",
+    "assets/frames/twin_turbine_fan/twin_turbine_fan_02.png",
+    "assets/frames/twin_turbine_fan/twin_turbine_fan_03.png",
+    "assets/frames/twin_turbine_fan/twin_turbine_fan_04.png",
+    "assets/frames/twin_turbine_fan/twin_turbine_fan_05.png",
+    "assets/frames/twin_turbine_fan/twin_turbine_fan_06.png",
+    "assets/frames/twin_turbine_fan/twin_turbine_fan_07.png"
+  ],
+  "frame_count": 8,
+  "sheet_width": 2172,
+  "sheet_height": 724,
+  "frame_width": 543,
+  "frame_height": 362,
+  "fps": 12,
+  "loop": true,
+  "anchor": "bottom_center",
+  "collision_guidance": "Collider only on the machine body. Wind zone is separate gameplay logic."
+}

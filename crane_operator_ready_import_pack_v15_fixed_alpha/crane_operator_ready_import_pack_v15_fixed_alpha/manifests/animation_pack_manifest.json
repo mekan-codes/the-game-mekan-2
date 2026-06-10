@@ -1,0 +1,192 @@
+{
+  "pack_name": "crane_operator_ready_import_pack_v15_fixed_alpha",
+  "version": 15,
+  "purpose": "Ready-to-import fixed animation package with true transparent backgrounds and sliced frames.",
+  "critical_notes": [
+    "This replaces v14.",
+    "The old v14 source sheets had checkerboard backgrounds baked into the pixels. v15 removes those backgrounds.",
+    "Use assets/frames_clean first. Do not use v14 frames.",
+    "Do not use native frame size as on-screen size; scale each mechanism to a tuned destination rectangle.",
+    "Do not use full frame rectangles as hitboxes."
+  ],
+  "format": {
+    "grid": [
+      4,
+      2
+    ],
+    "frame_count": 8,
+    "frame_order": "row-major"
+  },
+  "assets": [
+    {
+      "id": "magnet_tower",
+      "type": "mechanism",
+      "sheet_clean": "assets/sheets_clean/magnet_tower_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/magnet_tower",
+      "frame_pattern": "magnet_tower_00.png ... magnet_tower_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 10,
+      "anchor": "bottom_center",
+      "recommended_screen_size": [
+        95,
+        150
+      ],
+      "hitbox_guidance": "Tower body collider only; magnetic radius is separate non-collision gameplay zone."
+    },
+    {
+      "id": "magnetic_field_effect",
+      "type": "effect",
+      "sheet_clean": "assets/sheets_clean/magnetic_field_effect_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/magnetic_field_effect",
+      "frame_pattern": "magnetic_field_effect_00.png ... magnetic_field_effect_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 14,
+      "anchor": "center",
+      "recommended_screen_size": [
+        260,
+        200
+      ],
+      "hitbox_guidance": "Pure VFX overlay; no collision."
+    },
+    {
+      "id": "twin_turbine_fan",
+      "type": "mechanism",
+      "sheet_clean": "assets/sheets_clean/twin_turbine_fan_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/twin_turbine_fan",
+      "frame_pattern": "twin_turbine_fan_00.png ... twin_turbine_fan_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 12,
+      "anchor": "bottom_center",
+      "recommended_screen_size": [
+        130,
+        95
+      ],
+      "hitbox_guidance": "Fan machine body collider only; wind zone separate."
+    },
+    {
+      "id": "wind_gust_effect",
+      "type": "effect",
+      "sheet_clean": "assets/sheets_clean/wind_gust_effect_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/wind_gust_effect",
+      "frame_pattern": "wind_gust_effect_00.png ... wind_gust_effect_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 14,
+      "anchor": "center_left",
+      "recommended_screen_size": [
+        230,
+        85
+      ],
+      "hitbox_guidance": "Pure VFX overlay; no collision."
+    },
+    {
+      "id": "hydraulic_crusher",
+      "type": "mechanism",
+      "sheet_clean": "assets/sheets_clean/hydraulic_crusher_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/hydraulic_crusher",
+      "frame_pattern": "hydraulic_crusher_00.png ... hydraulic_crusher_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 10,
+      "anchor": "bottom_center",
+      "recommended_screen_size": [
+        140,
+        170
+      ],
+      "hitbox_guidance": "Frame collider plus press-head damage collider only."
+    },
+    {
+      "id": "extendable_bridge",
+      "type": "mechanism",
+      "sheet_clean": "assets/sheets_clean/extendable_bridge_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/extendable_bridge",
+      "frame_pattern": "extendable_bridge_00.png ... extendable_bridge_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 10,
+      "anchor": "left_mount",
+      "recommended_screen_size": [
+        190,
+        70
+      ],
+      "hitbox_guidance": "Collide only with visible bridge surface and mount body."
+    },
+    {
+      "id": "laser_gate",
+      "type": "mechanism",
+      "sheet_clean": "assets/sheets_clean/laser_gate_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/laser_gate",
+      "frame_pattern": "laser_gate_00.png ... laser_gate_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 12,
+      "anchor": "center",
+      "recommended_screen_size": [
+        150,
+        120
+      ],
+      "hitbox_guidance": "Pillar colliders always active; beam collider only when visible and narrow."
+    },
+    {
+      "id": "rotating_sweeper_arm",
+      "type": "mechanism",
+      "sheet_clean": "assets/sheets_clean/rotating_sweeper_arm_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/rotating_sweeper_arm",
+      "frame_pattern": "rotating_sweeper_arm_00.png ... rotating_sweeper_arm_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 10,
+      "anchor": "pivot_center",
+      "recommended_screen_size": [
+        115,
+        90
+      ],
+      "hitbox_guidance": "Collider follows visible arm and saw tip; not full frame."
+    },
+    {
+      "id": "swing_hammer_rig",
+      "type": "mechanism",
+      "sheet_clean": "assets/sheets_clean/swing_hammer_rig_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/swing_hammer_rig",
+      "frame_pattern": "swing_hammer_rig_00.png ... swing_hammer_rig_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 10,
+      "anchor": "top_center",
+      "recommended_screen_size": [
+        170,
+        150
+      ],
+      "hitbox_guidance": "Collider on hammer head and optionally rod/chain."
+    },
+    {
+      "id": "moving_dock",
+      "type": "mechanism",
+      "sheet_clean": "assets/sheets_clean/moving_dock_sheet_clean.png",
+      "frames_clean_dir": "assets/frames_clean/moving_dock",
+      "frame_pattern": "moving_dock_00.png ... moving_dock_07.png",
+      "frame_count": 8,
+      "frame_width": 543,
+      "frame_height": 362,
+      "fps": 8,
+      "anchor": "bottom_center",
+      "recommended_screen_size": [
+        260,
+        85
+      ],
+      "hitbox_guidance": "Landing/delivery zone should match visible deck only."
+    }
+  ]
+}
