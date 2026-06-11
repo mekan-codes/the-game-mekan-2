@@ -655,6 +655,19 @@ static void draw_circle_outline(App *app, int cx, int cy, int radius, SDL_Color 
     }
 }
 
+static void draw_thick_circle_outline(App *app, int cx, int cy, int radius, int thickness, SDL_Color color) {
+    int offset;
+    if (thickness < 1) {
+        thickness = 1;
+    }
+    for (offset = 0; offset < thickness; ++offset) {
+        int r = radius - thickness / 2 + offset;
+        if (r > 0) {
+            draw_circle_outline(app, cx, cy, r, color);
+        }
+    }
+}
+
 static TTF_Font *load_font_size(int size) {
     const char *paths[] = {
         "DejaVuSansMono.ttf",
@@ -828,10 +841,6 @@ static int draw_animation_loop_fit_ex(App *app, const AnimatedSprite *sprite, do
                                        bounds, angle, flip);
 }
 
-static int draw_animation_loop_fit(App *app, const AnimatedSprite *sprite, double time, FRect bounds) {
-    return draw_animation_loop_fit_ex(app, sprite, time, bounds, 0.0, SDL_FLIP_NONE);
-}
-
 static int draw_animation_frame_stretched_ex(App *app, const AnimatedSprite *sprite, int frame, FRect bounds,
                                              double angle, SDL_RendererFlip flip) {
     SDL_Rect out;
@@ -895,9 +904,7 @@ static const char *graphics_quality_name(GraphicsQuality quality) {
 
 static void cycle_graphics_quality(App *app) {
     if (app->graphicsQuality == GRAPHICS_SIMPLE_FAST) {
-        app->graphicsQuality = GRAPHICS_POLISHED;
-    } else if (app->graphicsQuality == GRAPHICS_POLISHED) {
-        app->graphicsQuality = GRAPHICS_FULL_ANIMATED;
+        app->graphicsQuality = app->assets.loadedCount > 0 ? GRAPHICS_POLISHED : GRAPHICS_SIMPLE_FAST;
     } else {
         app->graphicsQuality = GRAPHICS_SIMPLE_FAST;
     }
@@ -1083,6 +1090,19 @@ static int cargo_hits_segment(FRect cargo, double ax, double ay, double bx, doub
     return point_segment_distance(cx, cy, ax, ay, bx, by) <= radius + cargoRadius;
 }
 
+static int is_low_clearance_beam(FRect obstacle) {
+    return obstacle.w >= 180.0 && obstacle.h <= 48.0 && obstacle.y < 430.0;
+}
+
+static FRect overhead_blocker_rect(FRect beam) {
+    double top = HUD_H + 4.0;
+    double bottom = beam.y + beam.h;
+    if (bottom < top) {
+        bottom = top;
+    }
+    return (FRect){beam.x, top, beam.w, bottom - top};
+}
+
 static void add_obstacle(Level *level, FRect obstacle) {
     if (level->obstacleCount < MAX_STATIC_OBSTACLES) {
         level->obstacles[level->obstacleCount++] = obstacle;
@@ -1125,157 +1145,181 @@ static void initialize_levels(Game *game) {
         game->levels[i].requiredHoldTime = WIN_STABLE_SECONDS;
     }
 
+    /*
+       Timing-hazard campaign.
+       Every level has visible openings; no cargo is expected to pass through walls.
+       Hardness comes from timing magnets, rotating arms, moving gates, wind, and
+       strict delivery stability. Optional stars are risky but reachable.
+    */
+
     l = &game->levels[0];
-    l->name = "Level 1: Intro Crane Test";
-    l->objective = "Single pendulum: collect stars, then pocket the cargo.";
-    l->hint = "Medium bay, one overhead beam, and three optional stars teach the scoring route.";
-    l->timeLimit = 110.0;
-    l->startTrolleyX = 165.0;
+    l->name = "Level 1: Timing Training Yard";
+    l->objective = "Single pendulum: pass the moving block and land softly.";
+    l->hint = "Wait for the gate to move away. Stars are optional risk.";
+    l->timeLimit = 95.0;
+    l->startTrolleyX = 155.0;
     l->startCableLength = 270.0;
-    l->startTheta = 0.03;
-    l->targetBase = (FRect){970.0, 552.0, 170.0, 82.0};
-    l->stableSpeedLimit = 75.0;
-    l->stableAngleLimit = 0.14;
-    l->stableOmegaLimit = 0.42;
-    l->lowTargetRatio = 0.50;
-    add_obstacle(l, (FRect){820.0, 360.0, 235.0, 36.0});
-    add_bay_walls(l, 516.0, 116.0);
-    set_star(l, 0, 505.0, 370.0, 25.0);
-    set_star(l, 1, 890.0, 585.0, 25.0);
-    set_star(l, 2, 930.0, 326.0, 25.0);
+    l->startTheta = 0.025;
+    l->targetBase = (FRect){985.0, 552.0, 145.0, 82.0};
+    l->stableSpeedLimit = 60.0;
+    l->stableAngleLimit = 0.12;
+    l->stableOmegaLimit = 0.34;
+    l->lowTargetRatio = 0.54;
+    add_obstacle(l, (FRect){310.0, 318.0, 275.0, 34.0});
+    add_obstacle(l, (FRect){600.0, 510.0, 92.0, 76.0});
+    add_obstacle(l, (FRect){790.0, 348.0, 230.0, 34.0});
+    add_bay_walls(l, 514.0, 118.0);
+    l->gates[l->gateCount++] = (MovingGate){(FRect){700.0, 430.0, 58.0, 145.0}, AXIS_Y, 88.0, 1.45, 0.0, "TIMED"};
+    set_star(l, 0, 420.0, 400.0, 22.0);
+    set_star(l, 1, 645.0, 460.0, 22.0);
+    set_star(l, 2, 890.0, 430.0, 22.0);
 
     l = &game->levels[1];
-    l->name = "Level 2: Single Pendulum Gate Trial";
-    l->objective = "Single pendulum: low, lift, low, then bay.";
-    l->hint = "One cable height cannot solve this. Change length through each gate.";
+    l->name = "Level 2: Magnet Corridor";
+    l->objective = "Single pendulum: cross the magnet pull and time the gate.";
+    l->hint = "The magnet pulls sideways. Do not fight it with sudden motor input.";
     l->timeLimit = 100.0;
-    l->startTrolleyX = 160.0;
-    l->startCableLength = 275.0;
-    l->startTheta = -0.035;
-    l->targetBase = (FRect){1035.0, 552.0, 115.0, 82.0};
-    l->stableSpeedLimit = 50.0;
-    l->stableAngleLimit = 0.087;
-    l->stableOmegaLimit = 0.28;
-    l->lowTargetRatio = 0.56;
-    l->cargoKind = CARGO_FRAGILE;
-    add_obstacle(l, (FRect){260.0, 330.0, 300.0, 36.0});
-    add_obstacle(l, (FRect){560.0, 500.0, 118.0, 80.0});
-    add_obstacle(l, (FRect){730.0, 342.0, 265.0, 36.0});
-    add_obstacle(l, (FRect){928.0, 492.0, 58.0, 42.0});
-    add_bay_walls(l, 514.0, 118.0);
-    set_star(l, 0, 410.0, 410.0, 24.0);
-    set_star(l, 1, 620.0, 455.0, 24.0);
-    set_star(l, 2, 955.0, 505.0, 24.0);
-
-    l = &game->levels[2];
-    l->name = "Level 3: Double Pendulum Stabilization";
-    l->objective = "Double pendulum: calm the whole chain.";
-    l->hint = "Cargo speed alone is not enough. The upper link must settle too.";
-    l->timeLimit = 120.0;
-    l->startTrolleyX = 150.0;
-    l->startCableLength = 320.0;
-    l->startTheta = 0.02;
-    l->targetBase = (FRect){995.0, 552.0, 145.0, 82.0};
-    l->stableSpeedLimit = 45.0;
-    l->stableAngleLimit = 0.18;
-    l->stableOmegaLimit = 0.62;
-    l->safeChainMotion = 180.0;
-    l->lowTargetRatio = 0.53;
-    l->pendulumMode = PENDULUM_DOUBLE;
-    l->dampingScale = 1.08;
-    add_obstacle(l, (FRect){500.0, 354.0, 220.0, 34.0});
-    add_obstacle(l, (FRect){805.0, 350.0, 170.0, 34.0});
-    add_obstacle(l, (FRect){820.0, 500.0, 88.0, 82.0});
-    add_bay_walls(l, 514.0, 118.0);
-    set_star(l, 0, 485.0, 330.0, 24.0);
-    set_star(l, 1, 680.0, 505.0, 24.0);
-    set_star(l, 2, 910.0, 440.0, 24.0);
-
-    l = &game->levels[3];
-    l->name = "Level 4: Double Pendulum Needle Corridor";
-    l->objective = "Double pendulum: thread the no-stop corridor.";
-    l->hint = "A narrow S-route and unstable zone punish creeping and swing.";
-    l->timeLimit = 130.0;
-    l->startTrolleyX = 150.0;
-    l->startCableLength = 335.0;
-    l->startTheta = -0.025;
-    l->targetBase = (FRect){1060.0, 552.0, 95.0, 82.0};
-    l->stableSpeedLimit = 32.0;
-    l->stableAngleLimit = 0.13;
-    l->stableOmegaLimit = 0.45;
-    l->safeChainMotion = 110.0;
-    l->requiredHoldTime = 3.5;
-    l->lowTargetRatio = 0.58;
-    l->cargoKind = CARGO_FRAGILE;
-    l->pendulumMode = PENDULUM_DOUBLE;
-    l->dampingScale = 1.02;
-    add_obstacle(l, (FRect){250.0, 328.0, 260.0, 36.0});
-    add_obstacle(l, (FRect){420.0, 496.0, 90.0, 84.0});
-    add_obstacle(l, (FRect){540.0, 318.0, 240.0, 36.0});
-    add_obstacle(l, (FRect){710.0, 470.0, 85.0, 102.0});
-    add_obstacle(l, (FRect){835.0, 358.0, 160.0, 36.0});
-    add_bay_walls(l, 512.0, 120.0);
-    add_unstable_zone(l, (FRect){585.0, 126.0, 185.0, 526.0}, 4.0);
-    set_star(l, 0, 330.0, 420.0, 23.0);
-    set_star(l, 1, 660.0, 452.0, 23.0);
-    set_star(l, 2, 910.0, 500.0, 23.0);
-
-    l = &game->levels[4];
-    l->name = "Level 5: Triple Pendulum Height Puzzle";
-    l->objective = "Triple pendulum: low, lift, low, calm.";
-    l->hint = "Plan cable changes early. Sudden height changes wake every link.";
-    l->timeLimit = 150.0;
-    l->startTrolleyX = 150.0;
-    l->startCableLength = 360.0;
-    l->startTheta = 0.018;
-    l->targetBase = (FRect){1020.0, 552.0, 120.0, 82.0};
-    l->stableSpeedLimit = 28.0;
-    l->stableAngleLimit = 0.17;
-    l->stableOmegaLimit = 0.58;
-    l->safeChainMotion = 95.0;
-    l->requiredHoldTime = 3.5;
-    l->lowTargetRatio = 0.58;
-    l->pendulumMode = PENDULUM_TRIPLE;
-    l->dampingScale = 1.10;
-    add_obstacle(l, (FRect){245.0, 335.0, 300.0, 36.0});
-    add_obstacle(l, (FRect){575.0, 500.0, 125.0, 84.0});
-    add_obstacle(l, (FRect){730.0, 340.0, 255.0, 36.0});
-    add_obstacle(l, (FRect){905.0, 502.0, 66.0, 82.0});
-    add_bay_walls(l, 512.0, 120.0);
-    set_star(l, 0, 380.0, 420.0, 23.0);
-    set_star(l, 1, 640.0, 452.0, 23.0);
-    set_star(l, 2, 952.0, 430.0, 23.0);
-
-    l = &game->levels[5];
-    l->name = "Level 6: Triple Pendulum Final Exam";
-    l->objective = "Triple pendulum: boss route and fragile bay.";
-    l->hint = "Low ceiling, lift block, unstable bridge, slot, and strict chain calm.";
-    l->timeLimit = 165.0;
     l->startTrolleyX = 155.0;
-    l->startCableLength = 375.0;
-    l->startTheta = -0.018;
-    l->targetBase = (FRect){1070.0, 552.0, 90.0, 82.0};
-    l->stableSpeedLimit = 22.0;
-    l->stableAngleLimit = 0.10;
-    l->stableOmegaLimit = 0.36;
-    l->safeChainMotion = 65.0;
-    l->requiredHoldTime = 4.0;
+    l->startCableLength = 285.0;
+    l->startTheta = -0.02;
+    l->targetBase = (FRect){1025.0, 552.0, 118.0, 82.0};
+    l->stableSpeedLimit = 44.0;
+    l->stableAngleLimit = 0.082;
+    l->stableOmegaLimit = 0.24;
     l->lowTargetRatio = 0.60;
     l->cargoKind = CARGO_FRAGILE;
-    l->pendulumMode = PENDULUM_TRIPLE;
-    l->dampingScale = 1.08;
-    add_obstacle(l, (FRect){220.0, 326.0, 310.0, 36.0});
-    add_obstacle(l, (FRect){548.0, 500.0, 120.0, 86.0});
-    add_obstacle(l, (FRect){745.0, 310.0, 255.0, 36.0});
-    add_obstacle(l, (FRect){800.0, 500.0, 90.0, 88.0});
-    add_obstacle(l, (FRect){900.0, 362.0, 130.0, 34.0});
-    add_obstacle(l, (FRect){960.0, 496.0, 60.0, 86.0});
+    l->magnetScale = 1.0;
+    add_obstacle(l, (FRect){250.0, 310.0, 310.0, 36.0});
+    add_obstacle(l, (FRect){575.0, 508.0, 110.0, 80.0});
+    add_obstacle(l, (FRect){760.0, 320.0, 260.0, 36.0});
+    add_bay_walls(l, 514.0, 118.0);
+    l->magnets[l->magnetCount++] = (MagnetHazard){610.0, 450.0, 170.0, 420.0, 2.4, 0.0, (FRect){580.0, 438.0, 60.0, 92.0}};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){880.0, 430.0, 54.0, 150.0}, AXIS_Y, 90.0, 1.65, 1.0, "GATE"};
+    set_star(l, 0, 410.0, 400.0, 21.0);
+    set_star(l, 1, 690.0, 395.0, 21.0);
+    set_star(l, 2, 965.0, 455.0, 21.0);
+
+    l = &game->levels[2];
+    l->name = "Level 3: Sweeper Timing";
+    l->objective = "Double pendulum: time the rotating arm and calm the chain.";
+    l->hint = "The arm collider follows the visible rotating bar.";
+    l->timeLimit = 112.0;
+    l->startTrolleyX = 150.0;
+    l->startCableLength = 320.0;
+    l->startTheta = 0.018;
+    l->targetBase = (FRect){1005.0, 552.0, 122.0, 82.0};
+    l->stableSpeedLimit = 34.0;
+    l->stableAngleLimit = 0.15;
+    l->stableOmegaLimit = 0.48;
+    l->safeChainMotion = 120.0;
+    l->lowTargetRatio = 0.57;
+    l->pendulumMode = PENDULUM_DOUBLE;
+    l->dampingScale = 0.98;
+    add_obstacle(l, (FRect){420.0, 330.0, 220.0, 34.0});
+    add_obstacle(l, (FRect){610.0, 510.0, 105.0, 78.0});
+    add_obstacle(l, (FRect){820.0, 350.0, 190.0, 34.0});
+    add_bay_walls(l, 514.0, 118.0);
+    l->sweepers[l->sweeperCount++] = (SweeperHazard){760.0, 455.0, 145.0, 15.0, 1.35, 0.0};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){910.0, 440.0, 52.0, 136.0}, AXIS_Y, 72.0, 1.3, 0.4, "WAIT"};
+    set_star(l, 0, 465.0, 430.0, 21.0);
+    set_star(l, 1, 760.0, 545.0, 21.0);
+    set_star(l, 2, 948.0, 425.0, 21.0);
+
+    l = &game->levels[3];
+    l->name = "Level 4: Magnet Gate Double";
+    l->objective = "Double pendulum: use magnet timing and a moving gate.";
+    l->hint = "Do not park inside the yellow zone; pass when the gate opens.";
+    l->timeLimit = 118.0;
+    l->startTrolleyX = 150.0;
+    l->startCableLength = 335.0;
+    l->startTheta = -0.02;
+    l->targetBase = (FRect){1055.0, 552.0, 96.0, 82.0};
+    l->stableSpeedLimit = 27.0;
+    l->stableAngleLimit = 0.115;
+    l->stableOmegaLimit = 0.38;
+    l->safeChainMotion = 86.0;
+    l->requiredHoldTime = 3.6;
+    l->lowTargetRatio = 0.62;
+    l->cargoKind = CARGO_FRAGILE;
+    l->pendulumMode = PENDULUM_DOUBLE;
+    l->dampingScale = 0.92;
+    add_obstacle(l, (FRect){245.0, 306.0, 285.0, 36.0});
+    add_obstacle(l, (FRect){560.0, 508.0, 110.0, 82.0});
+    add_obstacle(l, (FRect){760.0, 320.0, 250.0, 36.0});
+    add_obstacle(l, (FRect){895.0, 504.0, 70.0, 82.0});
     add_bay_walls(l, 512.0, 120.0);
-    add_unstable_zone(l, (FRect){665.0, 126.0, 170.0, 526.0}, 4.0);
-    set_star(l, 0, 355.0, 414.0, 22.0);
-    set_star(l, 1, 735.0, 454.0, 22.0);
-    set_star(l, 2, 1010.0, 455.0, 22.0);
+    add_unstable_zone(l, (FRect){690.0, 148.0, 165.0, 467.0}, 3.2);
+    l->magnets[l->magnetCount++] = (MagnetHazard){610.0, 448.0, 165.0, 390.0, 2.2, 0.3, (FRect){582.0, 438.0, 56.0, 90.0}};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){850.0, 430.0, 55.0, 150.0}, AXIS_Y, 95.0, 1.75, 0.7, "TIMED"};
+    set_star(l, 0, 360.0, 405.0, 20.0);
+    set_star(l, 1, 660.0, 388.0, 20.0);
+    set_star(l, 2, 960.0, 455.0, 20.0);
+
+    l = &game->levels[4];
+    l->name = "Level 5: Triple Rotor Wind";
+    l->objective = "Triple pendulum: time the rotor, then land through wind.";
+    l->hint = "Wind affects the final cargo mass. Stabilize before the bay.";
+    l->timeLimit = 135.0;
+    l->startTrolleyX = 150.0;
+    l->startCableLength = 360.0;
+    l->startTheta = 0.016;
+    l->targetBase = (FRect){1022.0, 552.0, 104.0, 82.0};
+    l->stableSpeedLimit = 22.0;
+    l->stableAngleLimit = 0.13;
+    l->stableOmegaLimit = 0.44;
+    l->safeChainMotion = 62.0;
+    l->requiredHoldTime = 3.8;
+    l->lowTargetRatio = 0.63;
+    l->pendulumMode = PENDULUM_TRIPLE;
+    l->dampingScale = 0.92;
+    l->windScale = 1.0;
+    add_obstacle(l, (FRect){230.0, 310.0, 320.0, 38.0});
+    add_obstacle(l, (FRect){575.0, 508.0, 125.0, 82.0});
+    add_obstacle(l, (FRect){790.0, 315.0, 235.0, 38.0});
+    add_bay_walls(l, 512.0, 120.0);
+    l->sweepers[l->sweeperCount++] = (SweeperHazard){650.0, 455.0, 145.0, 15.0, 1.28, 0.6};
+    l->windZones[l->windZoneCount++] = (WindZone){(FRect){870.0, 365.0, 130.0, 205.0}, 430.0, 1};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){760.0, 430.0, 52.0, 150.0}, AXIS_Y, 85.0, 1.45, 0.3, "GATE"};
+    set_star(l, 0, 380.0, 410.0, 20.0);
+    set_star(l, 1, 650.0, 540.0, 20.0);
+    set_star(l, 2, 940.0, 430.0, 20.0);
+
+    l = &game->levels[5];
+    l->name = "Level 6: Final Timing Gauntlet";
+    l->objective = "Triple pendulum: magnet, rotor, gate, wind, fragile bay.";
+    l->hint = "This is the boss. Time hazards instead of crawling through them.";
+    l->timeLimit = 145.0;
+    l->startTrolleyX = 155.0;
+    l->startCableLength = 375.0;
+    l->startTheta = -0.016;
+    l->targetBase = (FRect){1072.0, 552.0, 84.0, 82.0};
+    l->stableSpeedLimit = 18.0;
+    l->stableAngleLimit = 0.09;
+    l->stableOmegaLimit = 0.30;
+    l->safeChainMotion = 45.0;
+    l->requiredHoldTime = 4.1;
+    l->lowTargetRatio = 0.64;
+    l->cargoKind = CARGO_FRAGILE;
+    l->pendulumMode = PENDULUM_TRIPLE;
+    l->dampingScale = 0.86;
+    l->magnetScale = 1.0;
+    l->windScale = 1.0;
+    add_obstacle(l, (FRect){220.0, 306.0, 305.0, 38.0});
+    add_obstacle(l, (FRect){545.0, 508.0, 120.0, 84.0});
+    add_obstacle(l, (FRect){740.0, 300.0, 260.0, 38.0});
+    add_obstacle(l, (FRect){900.0, 505.0, 72.0, 84.0});
+    add_obstacle(l, (FRect){990.0, 355.0, 118.0, 36.0});
+    add_bay_walls(l, 512.0, 120.0);
+    add_unstable_zone(l, (FRect){675.0, 148.0, 155.0, 467.0}, 3.0);
+    l->magnets[l->magnetCount++] = (MagnetHazard){590.0, 448.0, 165.0, 390.0, 2.4, 0.0, (FRect){562.0, 438.0, 56.0, 90.0}};
+    l->sweepers[l->sweeperCount++] = (SweeperHazard){790.0, 455.0, 150.0, 15.0, 1.42, 0.2};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){960.0, 430.0, 54.0, 150.0}, AXIS_Y, 94.0, 1.85, 0.9, "TIMED"};
+    l->windZones[l->windZoneCount++] = (WindZone){(FRect){1015.0, 390.0, 120.0, 185.0}, 420.0, -1};
+    set_star(l, 0, 350.0, 405.0, 19.0);
+    set_star(l, 1, 790.0, 542.0, 19.0);
+    set_star(l, 2, 1032.0, 452.0, 19.0);
 }
+
 
 static void update_cargo_position(Game *game) {
     game->cargo.x = game->trolley.x + game->cargo.length * sin(game->cargo.theta);
@@ -1502,6 +1546,10 @@ static int cargo_hits_any_obstacle(const Game *game) {
         if (frect_intersects(c, level->obstacles[i])) {
             return 1;
         }
+        if (is_low_clearance_beam(level->obstacles[i])
+            && frect_intersects(c, overhead_blocker_rect(level->obstacles[i]))) {
+            return 1;
+        }
     }
     for (i = 0; i < level->gateCount; ++i) {
         FRect gate = current_gate_rect(&level->gates[i], game->levelElapsed);
@@ -1553,7 +1601,7 @@ static int cargo_hits_any_obstacle(const Game *game) {
         double ay = s->pivotY - sin(a) * s->length * 0.5;
         double bx = s->pivotX + cos(a) * s->length * 0.5;
         double by = s->pivotY + sin(a) * s->length * 0.5;
-        if (cargo_hits_segment(c, ax, ay, bx, by, s->width * 0.5)) {
+        if (cargo_hits_segment(c, ax, ay, bx, by, s->width * 0.5 + 3.0)) {
             return 1;
         }
     }
@@ -1566,6 +1614,12 @@ static int cargo_hits_any_obstacle(const Game *game) {
 static void update_star_collection(Game *game) {
     Level *level = &game->levels[game->selectedLevel];
     int i;
+
+    /* Do not reward clipping into a wall/rotor/gate to pick a star. */
+    if (cargo_hits_any_obstacle(game)) {
+        return;
+    }
+
     for (i = 0; i < STAR_COUNT; ++i) {
         StarCollectible *star = &level->stars[i];
         double dx = game->cargo.x - star->x;
@@ -1749,22 +1803,32 @@ static void update_multi_pendulum(Game *game, const Level *level, double dt) {
     game->cargoInMagnet = 0;
     sync_chain_lengths(game);
 
-    for (i = 0; i < game->chain.massCount; ++i) {
-        ChainMass *mass = &game->chain.masses[i];
-        double vx = (mass->x - mass->prevX) * damping;
-        double vy = (mass->y - mass->prevY) * damping;
-        double displacement = sqrt(vx * vx + vy * vy);
+    /*
+       External hazard forces for multi-link pendulums.
+       The final cargo mass receives the strongest wind/magnet push; upper links
+       receive a weaker amount so the rope reacts naturally without exploding.
+    */
+    {
+        double externalAccel = wind_acceleration_for_cargo(game) + magnet_acceleration_for_cargo(game);
+        int lastMass = game->chain.massCount - 1;
+        for (i = 0; i < game->chain.massCount; ++i) {
+            ChainMass *mass = &game->chain.masses[i];
+            double vx = (mass->x - mass->prevX) * damping;
+            double vy = (mass->y - mass->prevY) * damping;
+            double displacement = sqrt(vx * vx + vy * vy);
+            double forceScale = (i == lastMass) ? 1.0 : 0.35;
 
-        if (displacement > maxDisplacement) {
-            double scale = maxDisplacement / displacement;
-            vx *= scale;
-            vy *= scale;
+            if (displacement > maxDisplacement) {
+                double scale = maxDisplacement / displacement;
+                vx *= scale;
+                vy *= scale;
+            }
+
+            mass->prevX = mass->x;
+            mass->prevY = mass->y;
+            mass->x += vx + externalAccel * forceScale * dt * dt;
+            mass->y += vy + GRAVITY * dt * dt;
         }
-
-        mass->prevX = mass->x;
-        mass->prevY = mass->y;
-        mass->x += vx;
-        mass->y += vy + GRAVITY * dt * dt;
     }
 
     /*
@@ -1888,7 +1952,6 @@ static void update_physics(Game *game, double dt) {
         game->chainMotion = game->cargo.speed;
     }
 
-    update_star_collection(game);
     update_unstable_zones(game, dt);
     if (game->state != STATE_PLAYING) {
         return;
@@ -1908,6 +1971,7 @@ static void update_physics(Game *game, double dt) {
         return;
     }
 
+    update_star_collection(game);
     update_stability_and_win(game, dt);
 }
 
@@ -2277,11 +2341,14 @@ static void draw_hud(App *app, const Game *game) {
 }
 
 static void draw_bottom_controls(App *app) {
+    char buffer[220];
     draw_panel(app, (FRect){0, BOTTOM_BAR_Y, LOGICAL_W, LOGICAL_H - BOTTOM_BAR_Y},
                color_rgba(31, 39, 43, 245), color_rgba(83, 94, 100, 255));
+    snprintf(buffer, sizeof(buffer),
+             "A/D motor    W/S cable    Space stabilizer    R restart    ESC pause    F11 fullscreen    F3 gfx: %s",
+             graphics_quality_name(app->graphicsQuality));
     draw_text(app, app->fontSmall,
-              "A/D or Left/Right: motor    W/S or Up/Down: cable    Space: stabilizer    R restart    ESC pause    F11 fullscreen    F3 graphics",
-              32, 680, color_rgba(232, 237, 232, 255));
+              buffer, 32, 680, color_rgba(232, 237, 232, 255));
 }
 
 static void drawDeliveryBay(App *app, FRect target, int moving, double time) {
@@ -2369,8 +2436,34 @@ static void drawSteelBeam(App *app, FRect beam, const char *label) {
 static void draw_obstacles(App *app, const Level *level) {
     int i;
     for (i = 0; i < level->obstacleCount; ++i) {
-        const char *label = (level->obstacles[i].h <= 48.0) ? "LOW CLEARANCE" : "BARRIER";
-        drawSteelBeam(app, level->obstacles[i], label);
+        FRect obstacle = level->obstacles[i];
+        const char *label = "";
+        if (is_low_clearance_beam(obstacle)) {
+            FRect blocker = overhead_blocker_rect(obstacle);
+            int stripe;
+            fill_rect(app, blocker, color_rgba(27, 39, 44, 58));
+            outline_rect(app, blocker, color_rgba(248, 191, 58, 135));
+            for (stripe = (int)blocker.x - 26; stripe < (int)(blocker.x + blocker.w + 26); stripe += 42) {
+                draw_thick_line(app, (double)stripe, blocker.y + blocker.h,
+                                (double)stripe + 32.0, blocker.y, 2,
+                                color_rgba(248, 191, 58, 118));
+            }
+            if (blocker.w >= 210.0 && blocker.h >= 96.0) {
+                FRect tag = {blocker.x + blocker.w * 0.5 - 64.0,
+                             blocker.y + blocker.h * 0.5 - 12.0, 128.0, 24.0};
+                fill_rect(app, tag, color_rgba(21, 31, 35, 185));
+                outline_rect(app, tag, color_rgba(248, 191, 58, 175));
+                draw_text_center(app, app->fontSmall, "NO OVERPASS",
+                                 (int)(tag.x + tag.w * 0.5), (int)(tag.y + 4.0),
+                                 color_rgba(255, 218, 91, 255));
+            }
+        }
+        if (obstacle.w >= 190.0 && obstacle.h <= 48.0) {
+            label = "LOW CLEARANCE";
+        } else if (obstacle.h >= 78.0 && obstacle.w >= 82.0) {
+            label = "BARRIER";
+        }
+        drawSteelBeam(app, obstacle, label);
     }
 }
 
@@ -2379,21 +2472,31 @@ static void drawUnstableZones(App *app, const Level *level) {
     for (i = 0; i < level->unstableZoneCount; ++i) {
         const UnstableZone *zone = &level->unstableZones[i];
         int stripe;
-        fill_rect(app, zone->rect, color_rgba(255, 202, 50, 26));
-        outline_rect(app, zone->rect, color_rgba(255, 210, 68, 190));
-        for (stripe = (int)zone->rect.x - 80; stripe < (int)(zone->rect.x + zone->rect.w + 80); stripe += 36) {
-            draw_thick_line(app, (double)stripe, zone->rect.y + 8.0,
-                            (double)stripe + 72.0, zone->rect.y + zone->rect.h - 8.0,
-                            3, color_rgba(42, 38, 28, 135));
+        FRect topStrip = {zone->rect.x, zone->rect.y, zone->rect.w, 16.0};
+        FRect bottomStrip = {zone->rect.x, zone->rect.y + zone->rect.h - 16.0, zone->rect.w, 16.0};
+        FRect labelPanel = {zone->rect.x + 8.0, zone->rect.y + zone->rect.h * 0.5 - 22.0,
+                            zone->rect.w - 16.0, 44.0};
+
+        outline_rect(app, zone->rect, color_rgba(245, 202, 56, 110));
+        fill_rect(app, topStrip, color_rgba(245, 202, 56, 54));
+        fill_rect(app, bottomStrip, color_rgba(245, 202, 56, 54));
+        for (stripe = (int)zone->rect.x - 24; stripe < (int)(zone->rect.x + zone->rect.w + 24); stripe += 34) {
+            draw_thick_line(app, (double)stripe, topStrip.y + topStrip.h,
+                            (double)stripe + 20.0, topStrip.y, 2, color_rgba(48, 43, 31, 130));
+            draw_thick_line(app, (double)stripe, bottomStrip.y + bottomStrip.h,
+                            (double)stripe + 20.0, bottomStrip.y, 2, color_rgba(48, 43, 31, 130));
         }
-        draw_text_center(app, app->fontSmall, "UNSTABLE ZONE",
-                         (int)(zone->rect.x + zone->rect.w * 0.5),
-                         (int)(zone->rect.y + 18.0), color_rgba(64, 49, 14, 255));
+        fill_rect(app, labelPanel, color_rgba(255, 225, 82, 34));
+        outline_rect(app, labelPanel, color_rgba(92, 69, 25, 95));
+        draw_text_center(app, app->fontSmall, "NO-STOP ZONE",
+                         (int)(labelPanel.x + labelPanel.w * 0.5),
+                         (int)(labelPanel.y + 5.0), color_rgba(64, 49, 14, 225));
         draw_text_center(app, app->fontSmall, "KEEP MOVING",
-                         (int)(zone->rect.x + zone->rect.w * 0.5),
-                         (int)(zone->rect.y + zone->rect.h - 28.0), color_rgba(64, 49, 14, 255));
+                         (int)(labelPanel.x + labelPanel.w * 0.5),
+                         (int)(labelPanel.y + 25.0), color_rgba(64, 49, 14, 225));
     }
 }
+
 
 static void drawStarCollectible(App *app, const StarCollectible *star, double time) {
     double pulse = star->collected ? 0.82 : 1.0 + 0.07 * sin(time * 4.2 + star->x * 0.013);
@@ -2412,6 +2515,8 @@ static void drawStarCollectible(App *app, const StarCollectible *star, double ti
         py[i] = star->y + sin(a) * outer;
     }
 
+    fill_circle(app, (int)star->x, (int)star->y, (int)(outer + 6.0),
+                star->collected ? color_rgba(19, 24, 25, 32) : color_rgba(19, 24, 25, 80));
     fill_circle(app, (int)star->x, (int)star->y, (int)(inner * 1.2), fill);
     for (i = 0; i < 5; ++i) {
         draw_thick_line(app, px[order[i]], py[order[i]], px[order[i + 1]], py[order[i + 1]],
@@ -2440,13 +2545,13 @@ static void drawWindZone(App *app, WindZone zone, double time) {
                   ? (FRect){zone.rect.x - 122.0, zone.rect.y + zone.rect.h * 0.5 - 47.5, 130.0, 95.0}
                   : (FRect){zone.rect.x + zone.rect.w - 8.0, zone.rect.y + zone.rect.h * 0.5 - 47.5, 130.0, 95.0};
     int usedLargeGust = 0;
-    int particleCount = app->graphicsQuality == GRAPHICS_SIMPLE_FAST ? 6 : 10;
+    int particleCount = app->graphicsQuality == GRAPHICS_SIMPLE_FAST ? 8 : 12;
     int particle;
 
     if (app->graphicsQuality == GRAPHICS_FULL_ANIMATED && animated_sprite_ready(&app->assets.anim.windGust)) {
         int gust;
         double span = zone.rect.w + 260.0;
-        fill_rect(app, zone.rect, color_rgba(61, 159, 231, 12));
+        fill_rect(app, zone.rect, color_rgba(61, 159, 231, 30));
         for (gust = 0; gust < 3; ++gust) {
             double travel = fmod(time * 135.0 + (double)gust * 128.0, span);
             double gx = dir >= 0 ? zone.rect.x - 230.0 + travel : zone.rect.x + zone.rect.w - travel;
@@ -2456,7 +2561,7 @@ static void drawWindZone(App *app, WindZone zone, double time) {
                                                         dir >= 0 ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL);
         }
     } else {
-        fill_rect(app, zone.rect, color_rgba(61, 159, 231, app->graphicsQuality == GRAPHICS_SIMPLE_FAST ? 8 : 14));
+        fill_rect(app, zone.rect, color_rgba(61, 159, 231, app->graphicsQuality == GRAPHICS_SIMPLE_FAST ? 26 : 32));
         for (particle = 0; particle < particleCount; ++particle) {
             double lane = (double)(particle % 4) / 3.0;
             double phase = fmod(time * (105.0 + (double)(particle % 3) * 12.0) + (double)particle * 47.0,
@@ -2469,13 +2574,14 @@ static void drawWindZone(App *app, WindZone zone, double time) {
             if (x < zone.rect.x + 8.0 || x > zone.rect.x + zone.rect.w - 8.0) {
                 continue;
             }
-            draw_thick_line(app, x, y, endX, y, 2, color_rgba(77, 173, 238, alpha));
-            draw_line(app, endX, y, endX - dir * 8.0, y - 5.0, color_rgba(94, 196, 252, alpha));
-            draw_line(app, endX, y, endX - dir * 8.0, y + 5.0, color_rgba(94, 196, 252, alpha));
+            draw_thick_line(app, x, y, endX, y, 3, color_rgba(77, 173, 238, alpha));
+            draw_thick_line(app, endX, y, endX - dir * 8.0, y - 5.0, 2, color_rgba(94, 196, 252, alpha));
+            draw_thick_line(app, endX, y, endX - dir * 8.0, y + 5.0, 2, color_rgba(94, 196, 252, alpha));
         }
     }
-    outline_rect(app, zone.rect, color_rgba(55, 130, 210, usedLargeGust ? 80 : 115));
-    draw_text_center(app, app->fontSmall, "WIND", (int)(zone.rect.x + zone.rect.w * 0.5), (int)(zone.rect.y + 10.0), color_rgba(29, 89, 139, 255));
+    fill_rect(app, (FRect){zone.rect.x, zone.rect.y, zone.rect.w, 18.0}, color_rgba(24, 91, 140, 82));
+    outline_rect(app, zone.rect, color_rgba(30, 125, 205, usedLargeGust ? 150 : 190));
+    draw_text_center(app, app->fontSmall, "WIND FIELD", (int)(zone.rect.x + zone.rect.w * 0.5), (int)(zone.rect.y + 3.0), color_rgba(219, 244, 255, 255));
 
     if (!((app->graphicsQuality == GRAPHICS_FULL_ANIMATED
            ? draw_animation_loop_fit_ex(app, &app->assets.anim.turbineFan, time, fanBase, 0.0,
@@ -2504,6 +2610,8 @@ static void drawMovingGate(App *app, const MovingGate *gate, FRect gateRect, dou
     FRect path = gate->baseRect;
     double marker = sin(gate->omega * time + gate->phase);
     int stripeY;
+    int stripeX;
+    FRect labelPanel;
     if (gate->axis == AXIS_X) {
         path.x -= fabs(gate->amplitude);
         path.w += fabs(gate->amplitude) * 2.0;
@@ -2512,62 +2620,102 @@ static void drawMovingGate(App *app, const MovingGate *gate, FRect gateRect, dou
         path.h += fabs(gate->amplitude) * 2.0;
     }
 
-    fill_rect(app, path, color_rgba(222, 91, 73, 26));
-    outline_rect(app, path, color_rgba(216, 102, 84, 115));
-    draw_line(app, path.x + path.w * 0.5, path.y, path.x + path.w * 0.5, path.y + path.h, color_rgba(222, 91, 73, 105));
+    /* Movement path only: a readable warning frame, while the solid gate remains the collider. */
+    fill_rect(app, path, color_rgba(224, 72, 62, 20));
+    outline_rect(app, path, color_rgba(224, 72, 62, 155));
+    for (stripeX = (int)path.x; stripeX < (int)(path.x + path.w); stripeX += 28) {
+        draw_line(app, (double)stripeX, path.y, (double)(stripeX + 14), path.y,
+                  color_rgba(255, 206, 84, 170));
+        draw_line(app, (double)stripeX, path.y + path.h, (double)(stripeX + 14), path.y + path.h,
+                  color_rgba(255, 206, 84, 170));
+    }
+    labelPanel = (FRect){path.x + path.w * 0.5 - 76.0, path.y + 8.0, 152.0, 23.0};
+    if (labelPanel.x < 8.0) {
+        labelPanel.x = 8.0;
+    } else if (labelPanel.x + labelPanel.w > LOGICAL_W - 8.0) {
+        labelPanel.x = LOGICAL_W - 8.0 - labelPanel.w;
+    }
+    fill_rect(app, labelPanel, color_rgba(44, 26, 28, 190));
+    outline_rect(app, labelPanel, color_rgba(255, 191, 73, 175));
+    draw_text_center(app, app->fontSmall, "WAIT FOR OPENING",
+                     (int)(labelPanel.x + labelPanel.w * 0.5),
+                     (int)(labelPanel.y + 4.0), color_rgba(255, 218, 134, 255));
 
-    fill_rect(app, (FRect){gateRect.x + 5.0, gateRect.y + 6.0, gateRect.w, gateRect.h}, color_rgba(0, 0, 0, 92));
-    if (!draw_texture_stretched(app, app->assets.movingGate, gateRect)) {
-        fill_rect(app, gateRect, color_rgba(181, 67, 55, 255));
-        fill_rect(app, (FRect){gateRect.x + 6.0, gateRect.y + 6.0, gateRect.w - 12.0, gateRect.h - 12.0}, color_rgba(219, 90, 64, 255));
-        fill_rect(app, (FRect){gateRect.x, gateRect.y, gateRect.w, 10.0}, color_rgba(98, 42, 43, 255));
-        fill_rect(app, (FRect){gateRect.x, gateRect.y + gateRect.h - 10.0, gateRect.w, 10.0}, color_rgba(98, 42, 43, 255));
-    }
+    fill_rect(app, (FRect){gateRect.x + 5.0, gateRect.y + 6.0, gateRect.w, gateRect.h}, color_rgba(0, 0, 0, 82));
+    fill_rect(app, gateRect, color_rgba(151, 44, 42, 245));
+    fill_rect(app, (FRect){gateRect.x + 6.0, gateRect.y + 6.0, gateRect.w - 12.0, gateRect.h - 12.0}, color_rgba(215, 70, 52, 245));
+    fill_rect(app, (FRect){gateRect.x, gateRect.y, gateRect.w, 10.0}, color_rgba(82, 31, 34, 255));
+    fill_rect(app, (FRect){gateRect.x, gateRect.y + gateRect.h - 10.0, gateRect.w, 10.0}, color_rgba(82, 31, 34, 255));
     outline_rect(app, gateRect, color_rgba(42, 27, 29, 255));
-    for (stripeY = (int)gateRect.y + 18; stripeY < (int)(gateRect.y + gateRect.h - 20.0); stripeY += 42) {
-        draw_thick_line(app, gateRect.x + 5.0, stripeY + 18.0, gateRect.x + gateRect.w - 5.0, stripeY, 3, color_rgba(247, 194, 65, 230));
+
+    for (stripeY = (int)gateRect.y + 20; stripeY < (int)(gateRect.y + gateRect.h - 18.0); stripeY += 42) {
+        draw_thick_line(app, gateRect.x + 5.0, stripeY + 18.0, gateRect.x + gateRect.w - 5.0, stripeY, 3, color_rgba(247, 194, 65, 225));
     }
-    draw_text_center(app, app->fontSmall, gate->label != NULL ? gate->label : "GATE",
-                     (int)(gateRect.x + gateRect.w * 0.5), (int)(gateRect.y + gateRect.h * 0.5 - 9.0), color_rgba(255, 226, 181, 255));
+
+    draw_text_center(app, app->fontSmall, gate->label != NULL ? gate->label : "TIMED",
+                     (int)(gateRect.x + gateRect.w * 0.5), (int)(gateRect.y + gateRect.h * 0.5 - 9.0),
+                     color_rgba(255, 226, 181, 255));
     fill_circle(app, (int)(gateRect.x + gateRect.w * 0.5), (int)(gateRect.y - 14.0), 8,
                 marker > 0.55 ? color_rgba(83, 230, 116, 255) : color_rgba(225, 61, 54, 255));
     fill_circle(app, (int)(gateRect.x + gateRect.w * 0.5), (int)(gateRect.y + gateRect.h + 14.0), 8,
                 marker < -0.55 ? color_rgba(83, 230, 116, 255) : color_rgba(225, 61, 54, 255));
 }
 
+
 static void drawMagnetHazard(App *app, const MagnetHazard *magnet, double time, double cargoX, double cargoY) {
     double pulse = magnet_pulse(magnet, time);
     double dx = cargoX - magnet->x;
     double dy = cargoY - magnet->y;
     double cargoDist = sqrt(dx * dx + dy * dy);
-    int drawField = cargoDist <= magnet->radius * 1.15;
-    FRect fieldBounds = {magnet->x - 130.0, magnet->y - 100.0, 260.0, 200.0};
-    FRect towerBounds = {magnet->body.x + magnet->body.w * 0.5 - 47.5,
-                         magnet->body.y + magnet->body.h - 150.0, 95.0, 150.0};
-    int usedField = 0;
+    int activeNearCargo = cargoDist <= magnet->radius * 1.10;
+    int ringA = activeNearCargo ? 44 + (int)(pulse * 16.0) : 44;
+    int ringB = activeNearCargo ? 88 + (int)(pulse * 22.0) : 86;
+    int fieldRadius = (int)magnet->radius;
+    FRect base = magnet->body;
+    FRect inner = {base.x + 7.0, base.y + 7.0, base.w - 14.0, base.h - 14.0};
 
-    if (drawField && app->graphicsQuality == GRAPHICS_FULL_ANIMATED) {
-        usedField = draw_animation_loop_fit(app, &app->assets.anim.magneticField, time + pulse * 0.18, fieldBounds);
+    /* Draw only clean rings around the physical magnet. No large PNG field sheet. */
+    fill_circle(app, (int)magnet->x, (int)magnet->y, fieldRadius,
+                color_rgba(80, 181, 255, activeNearCargo ? 24 : 16));
+    draw_thick_circle_outline(app, (int)magnet->x, (int)magnet->y, fieldRadius, 3,
+                              color_rgba(112, 76, 232, activeNearCargo ? 142 : 108));
+    draw_thick_circle_outline(app, (int)magnet->x, (int)magnet->y, ringA, 3,
+                              color_rgba(84, 210, 255, activeNearCargo ? 230 : 168));
+    draw_thick_circle_outline(app, (int)magnet->x, (int)magnet->y, ringB, 2,
+                              color_rgba(156, 104, 245, activeNearCargo ? 190 : 136));
+    if (activeNearCargo) {
+        draw_thick_circle_outline(app, (int)magnet->x, (int)magnet->y, (int)(magnet->radius * 0.56), 2,
+                                  color_rgba(84, 210, 255, 118));
+        draw_thick_line(app, cargoX, cargoY, magnet->x, magnet->y, 2, color_rgba(84, 210, 255, 135));
     }
-    if (drawField && !usedField) {
-        int ringA = 40 + (int)(pulse * 18.0);
-        int ringB = 66 + (int)(pulse * 18.0);
-        fill_circle(app, (int)magnet->x, (int)magnet->y, 24, color_rgba(82, 178, 246, (Uint8)(18 + 20 * pulse)));
-        draw_circle_outline(app, (int)magnet->x, (int)magnet->y, ringA, color_rgba(96, 201, 255, (Uint8)(46 + 42 * pulse)));
-        if (app->graphicsQuality != GRAPHICS_SIMPLE_FAST) {
-            draw_circle_outline(app, (int)magnet->x, (int)magnet->y, ringB, color_rgba(126, 72, 228, (Uint8)(26 + 26 * pulse)));
-        }
-    } else {
-        fill_circle(app, (int)magnet->x, (int)magnet->y, 12, color_rgba(82, 178, 246, 24));
-    }
-    if (!((app->graphicsQuality == GRAPHICS_FULL_ANIMATED
-           ? draw_animation_loop_fit(app, &app->assets.anim.magnetTower, time, towerBounds)
-           : draw_animation_frame_fit_ex(app, &app->assets.anim.magnetTower, 0, towerBounds, 0.0, SDL_FLIP_NONE)))
-        && !draw_texture_fit(app, app->assets.magnetTower, (FRect){magnet->body.x - 10.0, magnet->body.y - 18.0, magnet->body.w + 20.0, magnet->body.h + 32.0})) {
-        drawSteelBeam(app, magnet->body, "MAGNET");
-        outline_rect(app, magnet->body, color_rgba(89, 42, 158, 230));
-    }
+    draw_text_center(app, app->fontSmall, "MAGNET FIELD",
+                     (int)magnet->x, (int)(magnet->y - magnet->radius * 0.62),
+                     color_rgba(48, 76, 132, activeNearCargo ? 255 : 220));
+
+    /* The solid-looking machine stays inside magnet->body, the only magnet collider. */
+    fill_rect(app, (FRect){base.x + 5.0, base.y + 6.0, base.w, base.h}, color_rgba(0, 0, 0, 70));
+    fill_rect(app, base, color_rgba(54, 64, 74, 245));
+    fill_rect(app, inner, color_rgba(82, 94, 108, 245));
+    fill_rect(app, (FRect){inner.x + 7.0, inner.y + 8.0, inner.w - 14.0, 11.0}, color_rgba(116, 132, 148, 230));
+
+    /* U-shaped magnet head. */
+    fill_rect(app, (FRect){base.x + 12.0, base.y + 22.0, base.w - 24.0, 12.0}, color_rgba(47, 55, 64, 255));
+    fill_rect(app, (FRect){base.x + 12.0, base.y + 22.0, 12.0, 42.0}, color_rgba(85, 189, 238, 255));
+    fill_rect(app, (FRect){base.x + base.w - 24.0, base.y + 22.0, 12.0, 42.0}, color_rgba(85, 189, 238, 255));
+    fill_rect(app, (FRect){base.x + 24.0, base.y + 54.0, base.w - 48.0, 10.0}, color_rgba(47, 55, 64, 255));
+    outline_rect(app, base, color_rgba(43, 50, 57, 230));
+
+    fill_circle(app, (int)magnet->x, (int)magnet->y, 8, color_rgba(98, 208, 255, activeNearCargo ? 230 : 145));
+    draw_text_center(app, app->fontSmall, activeNearCargo ? "MAGNET PULL" : "MAGNET",
+                     (int)(base.x + base.w * 0.5), (int)(base.y + base.h + 8.0),
+                     color_rgba(50, 80, 130, 255));
+
+#if DEBUG_COLLIDERS
+    draw_circle_outline(app, (int)magnet->x, (int)magnet->y, (int)magnet->radius, color_rgba(170, 95, 255, 110));
+    outline_rect(app, magnet->body, color_rgba(170, 95, 255, 160));
+#endif
 }
+
 
 static void drawLaserHazard(App *app, const LaserHazard *laser, double time) {
     int active = laser_is_active(laser, time);
@@ -2698,30 +2846,35 @@ static void drawHammerHazard(App *app, const HammerHazard *hammer, double time) 
 
 static void drawSweeperHazard(App *app, const SweeperHazard *sweeper, double time) {
     double a = current_sweeper_angle(sweeper, time);
-    FRect bounds = {sweeper->pivotX - 80.0, sweeper->pivotY - 65.0, 160.0, 130.0};
-    int frame = animation_phase_frame(&app->assets.anim.sweeperArm, a);
-    int usedVisual = 0;
-    if (app->graphicsQuality == GRAPHICS_FULL_ANIMATED) {
-        usedVisual = draw_animation_frame_fit_ex(app, &app->assets.anim.sweeperArm, frame, bounds, 0.0, SDL_FLIP_NONE);
-    } else {
-        usedVisual = draw_texture_fit_ex(app, app->assets.rotatingSweeperArm, bounds, a * 180.0 / M_PI, SDL_FLIP_NONE);
-        if (!usedVisual && app->graphicsQuality != GRAPHICS_SIMPLE_FAST) {
-            usedVisual = draw_animation_frame_fit_ex(app, &app->assets.anim.sweeperArm, 0, bounds, a * 180.0 / M_PI, SDL_FLIP_NONE);
-        }
-    }
-    if (!usedVisual) {
-        draw_circle_outline(app, (int)sweeper->pivotX, (int)sweeper->pivotY, (int)(sweeper->length * 0.5), color_rgba(231, 87, 55, 55));
-        draw_thick_line(app,
-                        sweeper->pivotX - cos(a) * sweeper->length * 0.5,
-                        sweeper->pivotY - sin(a) * sweeper->length * 0.5,
-                        sweeper->pivotX + cos(a) * sweeper->length * 0.5,
-                        sweeper->pivotY + sin(a) * sweeper->length * 0.5,
-                        (int)sweeper->width, color_rgba(204, 78, 53, 230));
-    }
-    if (!usedVisual || DEBUG_COLLIDERS) {
-        fill_circle(app, (int)sweeper->pivotX, (int)sweeper->pivotY, 12, color_rgba(42, 46, 50, 255));
-    }
+    double half = sweeper->length * 0.5;
+    double ax = sweeper->pivotX - cos(a) * half;
+    double ay = sweeper->pivotY - sin(a) * half;
+    double bx = sweeper->pivotX + cos(a) * half;
+    double by = sweeper->pivotY + sin(a) * half;
+
+    /* Movement guide: readable, not a giant sprite. */
+    draw_circle_outline(app, (int)sweeper->pivotX, (int)sweeper->pivotY, (int)half,
+                        color_rgba(214, 82, 58, 70));
+    draw_circle_outline(app, (int)sweeper->pivotX, (int)sweeper->pivotY, (int)(half + sweeper->width * 0.5),
+                        color_rgba(214, 82, 58, 38));
+
+    draw_thick_line(app, ax, ay, bx, by, (int)(sweeper->width + 6.0), color_rgba(58, 36, 32, 245));
+    draw_thick_line(app, ax, ay, bx, by, (int)sweeper->width, color_rgba(211, 69, 50, 245));
+    draw_thick_line(app, ax, ay, bx, by, 4, color_rgba(246, 190, 59, 245));
+
+    fill_circle(app, (int)sweeper->pivotX, (int)sweeper->pivotY, 15, color_rgba(34, 39, 43, 255));
+    fill_circle(app, (int)sweeper->pivotX, (int)sweeper->pivotY, 8, color_rgba(238, 176, 54, 255));
+    fill_circle(app, (int)bx, (int)by, 8, color_rgba(232, 78, 58, 245));
+    fill_circle(app, (int)ax, (int)ay, 8, color_rgba(232, 78, 58, 245));
+    draw_text_center(app, app->fontSmall, "ROTATING ARM",
+                     (int)sweeper->pivotX, (int)(sweeper->pivotY + half + 15.0),
+                     color_rgba(135, 40, 35, 255));
+
+#if DEBUG_COLLIDERS
+    draw_thick_line(app, ax, ay, bx, by, (int)sweeper->width, color_rgba(255, 120, 120, 120));
+#endif
 }
+
 
 static void drawMovingDockTrack(App *app, const Level *level) {
     FRect path = level->targetBase;
@@ -2845,7 +2998,6 @@ static void draw_level_world(App *app, const Game *game) {
         drawWindZone(app, level->windZones[i], game->levelElapsed);
     }
     draw_obstacles(app, level);
-    drawStars(app, level, game->levelElapsed);
     for (i = 0; i < level->gateCount; ++i) {
         FRect gate = current_gate_rect(&level->gates[i], game->levelElapsed);
         drawMovingGate(app, &level->gates[i], gate, game->levelElapsed);
@@ -2868,6 +3020,7 @@ static void draw_level_world(App *app, const Game *game) {
     for (i = 0; i < level->sweeperCount; ++i) {
         drawSweeperHazard(app, &level->sweepers[i], game->levelElapsed);
     }
+    drawStars(app, level, game->levelElapsed);
     draw_crane(app, game);
     drawDeliveryProgressNearTarget(app, game, target);
     draw_hud(app, game);

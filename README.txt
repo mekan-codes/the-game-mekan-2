@@ -5,7 +5,7 @@ Mission
 -------
 Control the crane trolley on the top rail, guide the swinging cargo through static industrial geometry, lower it into the recessed green delivery bay, and hold it stable until the delivery timer fills.
 
-This version is a harder 6-level pendulum campaign. The old 10-level animated hazard campaign is not used. Difficulty comes from cable control, narrow static routes, unstable no-stopping zones, stricter delivery thresholds, chain-motion stability, and optional star collectibles.
+This version is a harder 6-level timing-hazard pendulum campaign. The old 10-level animated hazard campaign is not used. Difficulty comes from cable control, readable timing hazards, unstable no-stopping zones, stricter delivery thresholds, chain-motion stability, wind/magnet forces, and optional star collectibles.
 
 Controls
 --------
@@ -60,22 +60,22 @@ Campaign Levels
 All 6 levels are unlocked in Level Select.
 
 Level 1: Intro Crane Test
-Single pendulum. Medium bay, one overhead beam, and three stars that teach high, low, and near-ceiling control.
+Timing Training Yard. Single pendulum, moving gate, medium bay, and stars that teach timing around a visible red gate.
 
 Level 2: Single Pendulum Gate Trial
-Single pendulum. Low ceiling, lift-over floor block, second low ceiling, side pocket, and narrow recessed bay.
+Magnet Corridor. Single pendulum, compact magnet pull, moving gate, fragile delivery, and risky stars around the pull zone.
 
 Level 3: Double Pendulum Stabilization
-Double pendulum. Semi-open route, final entry restriction, chain-motion delivery check, and stars that reward calm control.
+Sweeper Timing. Double pendulum, rotating arm, moving gate, chain-motion delivery check, and stars that reward timed calm control.
 
 Level 4: Double Pendulum Needle Corridor
-Double pendulum. Narrow S-style corridor, unstable no-stopping zone, risky detour star, and strict final bay.
+Magnet Gate Double. Double pendulum, compact magnet pull, moving gate, unstable/no-stop zone, risky stars, and strict final bay.
 
 Level 5: Triple Pendulum Height Puzzle
-Triple pendulum. Low pass, lift-over block, second low pass, pre-target entry star, and stricter chain calm.
+Triple Rotor Wind. Triple pendulum, rotating arm, wind zone, moving gate, pre-target star, and stricter chain calm.
 
 Level 6: Triple Pendulum Final Exam
-Triple pendulum boss route. Low ceiling, lift block, unstable bridge zone, narrow slot, side-pocket star, fragile recessed bay, and the strictest delivery thresholds.
+Final Timing Gauntlet. Triple pendulum boss route with magnet pull, rotating arm, moving gate, wind, unstable/no-stop zone, fragile recessed bay, and the strictest delivery thresholds.
 
 Win and Lose Rules
 ------------------
@@ -102,3 +102,11 @@ Default graphics mode is Simple Fast. Static visuals for the crane, rail, cable,
 The new stars and unstable zones are cheap SDL primitive drawings. No heavy animated PNG hazards, repeated transparent overlays, or particle spam were added.
 
 The game uses a fixed 1280x720 logical resolution. Resized windows and fullscreen desktop mode are letterboxed when needed so gameplay is not cropped.
+
+## Timing hazard campaign pass
+
+The 6-level campaign now focuses on timing hazards instead of static-only layouts. Levels use magnets, rotating sweepers, moving gates, wind zones, unstable/no-stop zones, and stricter delivery thresholds. Double/triple pendulum cargo now receives wind/magnet external forces so hazards affect the final cargo mass. Star placements were replaced with risky but reachable positions, and stars no longer collect while the cargo is colliding.
+
+## Hazard visual bugfix pass
+
+This build replaces the buggy magnet field, sweeper, moving-gate, and unstable-zone visuals with clean SDL primitive drawings. The mechanics are preserved, but old large animated/texture effects are no longer used for these hazards in normal rendering. Magnets now appear as small machines with subtle field rings, sweepers appear as clear rotating red arms, moving gates show a faint movement path, and no-stop zones use only border strips and a compact label.
