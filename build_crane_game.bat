@@ -57,7 +57,7 @@ echo Building Crane Operator: Safe Cargo Delivery...
 echo Compiler: "%GCC%"
 echo SDL path: "%SDL_PREFIX%"
 if "%IMAGE_ENABLED%"=="1" (
-    echo SDL2_image: found, PNG v11/v12 assets enabled
+    echo SDL2_image: found, PNG assets enabled
 ) else (
     echo SDL2_image: not found, using procedural fallback drawings
 )
@@ -79,14 +79,21 @@ if "%IMAGE_ENABLED%"=="1" (
         libLerc.dll liblzma-5.dll libpcre2-8-0.dll libpng16-16.dll librav1e.dll
         libsharpyuv-0.dll libstdc++-6.dll libSvtAv1Enc-4.dll libtiff-6.dll libwebp-7.dll
         libwebpdemux-2.dll libwinpthread-1.dll libyuv.dll libzstd.dll zlib1.dll
-    ) do if exist "%SDL_PREFIX%\bin\%%D" copy /Y "%SDL_PREFIX%\bin\%%D" "%%D" >nul
+    ) do (
+        if exist "runtime\%%D" (
+            copy /Y "runtime\%%D" "%%D" >nul
+        ) else if exist "%SDL_PREFIX%\bin\%%D" (
+            copy /Y "%SDL_PREFIX%\bin\%%D" "%%D" >nul
+        )
+    )
 ) else (
-    rem The assignment folders include runtime DLLs but not headers/libs.
-    rem Copy those DLLs beside the EXE when available so the game can launch directly.
-    if exist "Assignment9\SDL2.dll" copy /Y "Assignment9\SDL2.dll" "SDL2.dll" >nul
-    if exist "Assignment9\SDL2_ttf.dll" copy /Y "Assignment9\SDL2_ttf.dll" "SDL2_ttf.dll" >nul
+    rem Copy runtime fallback DLLs beside the EXE when available so the game can launch directly.
+    if exist "runtime\SDL2.dll" copy /Y "runtime\SDL2.dll" "SDL2.dll" >nul
+    if exist "runtime\SDL2_ttf.dll" copy /Y "runtime\SDL2_ttf.dll" "SDL2_ttf.dll" >nul
+    if exist "runtime\SDL2_image.dll" copy /Y "runtime\SDL2_image.dll" "SDL2_image.dll" >nul
     if not exist "SDL2.dll" if exist "%SDL_PREFIX%\bin\SDL2.dll" copy /Y "%SDL_PREFIX%\bin\SDL2.dll" "SDL2.dll" >nul
     if not exist "SDL2_ttf.dll" if exist "%SDL_PREFIX%\bin\SDL2_ttf.dll" copy /Y "%SDL_PREFIX%\bin\SDL2_ttf.dll" "SDL2_ttf.dll" >nul
+    if not exist "SDL2_image.dll" if exist "%SDL_PREFIX%\bin\SDL2_image.dll" copy /Y "%SDL_PREFIX%\bin\SDL2_image.dll" "SDL2_image.dll" >nul
 )
 
 echo.

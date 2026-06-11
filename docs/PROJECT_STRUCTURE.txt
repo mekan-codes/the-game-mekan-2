@@ -1,0 +1,65 @@
+Crane Operator: Safe Cargo Delivery - Project Structure
+=======================================================
+
+Root
+----
+crane_game.c
+  Main SDL2 C source file.
+
+build_crane_game.bat
+  Windows build script. It compiles crane_game.c into crane_game.exe and copies
+  runtime DLLs beside the executable when needed.
+
+crane_game.exe
+  Built Windows executable kept in the root for this school project.
+
+README.txt
+  Build, run, controls, and project overview.
+
+DejaVuSansMono.ttf
+  Simple root font fallback. The organized font copy is also kept under
+  assets/fonts/.
+
+Assets
+------
+assets/backgrounds/
+  Background image used by the game.
+
+assets/world/
+  Main world sprites: crane, cargo, beams, delivery dock, gate, fan, and related
+  objects.
+
+assets/effects/
+  Lightweight effect sprites.
+
+assets/ui/
+  Menu and HUD UI sprites.
+
+assets/hazards/
+  Static hazard sprites copied from the old monster asset pack.
+
+assets/animations/
+  Optional SDL2_image animation frame folders. Each subfolder contains the clean
+  numbered frames used by load_animation().
+
+assets/fonts/
+  Font fallback copy used by load_font_size().
+
+Runtime
+-------
+runtime/
+  Source-of-truth fallback DLL copies. The build script can copy these files
+  back beside crane_game.exe so the game launches directly on Windows.
+
+Removed Reference Material
+--------------------------
+The old assignment folders, old asset pack folders, and one-off patch scripts
+were removed after their required assets, font, and runtime DLLs were copied
+into the organized folders and the build/run flow was verified.
+
+Build/Run Flow
+--------------
+1. Run build_crane_game.bat.
+2. Run crane_game.exe.
+3. If SDL2_image is installed, assets load from assets/. If not, the game uses
+   procedural fallback drawings.

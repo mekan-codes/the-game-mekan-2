@@ -1,0 +1,21 @@
+# Build intermediates
+*.o
+*.obj
+
+# Logs/temp
+*.log
+*.tmp
+
+# Editor folders
+.vscode/
+.idea/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Old temporary/debug media
+game_bug_frames/
+imagegen.png
+asset_contact.jpg
+game-bug.mp4

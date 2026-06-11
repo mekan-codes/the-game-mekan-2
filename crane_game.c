@@ -394,22 +394,7 @@ typedef struct {
 
 static SDL_Texture *load_asset_texture(App *app, const char *relativePath) {
 #ifdef USE_SDL_IMAGE
-    char fullPath[512];
     SDL_Texture *texture = IMG_LoadTexture(app->renderer, relativePath);
-    if (texture != NULL) {
-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-        app->assets.loadedCount++;
-        return texture;
-    }
-    snprintf(fullPath, sizeof(fullPath), "crane_operator_asset_pack_v11_polished/%s", relativePath);
-    texture = IMG_LoadTexture(app->renderer, fullPath);
-    if (texture != NULL) {
-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-        app->assets.loadedCount++;
-        return texture;
-    }
-    snprintf(fullPath, sizeof(fullPath), "crane_operator_monster_asset_pack_v12/%s", relativePath);
-    texture = IMG_LoadTexture(app->renderer, fullPath);
     if (texture != NULL) {
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
         app->assets.loadedCount++;
@@ -442,7 +427,6 @@ static void load_animation(App *app, AnimatedSprite *sprite, const char *folder,
                            int frameCount, double fps, int loop) {
 #ifdef USE_SDL_IMAGE
     char path[512];
-    char fallbackPath[512];
     int i;
     int loadedHere = 0;
 
@@ -454,24 +438,17 @@ static void load_animation(App *app, AnimatedSprite *sprite, const char *folder,
         frameCount = ANIM_MAX_FRAMES;
     }
     for (i = 0; i < frameCount; ++i) {
-        snprintf(path, sizeof(path), "crane_operator_ready_import_pack_v15_fixed_alpha/assets/frames_clean/%s/%s_%02d.png",
+        snprintf(path, sizeof(path), "assets/animations/%s/%s_%02d.png",
                  folder, basename, i);
         sprite->frames[i] = IMG_LoadTexture(app->renderer, path);
         if (sprite->frames[i] == NULL) {
-            snprintf(fallbackPath, sizeof(fallbackPath),
-                     "crane_operator_ready_import_pack_v15_fixed_alpha/crane_operator_ready_import_pack_v15_fixed_alpha/assets/frames_clean/%s/%s_%02d.png",
-                     folder, basename, i);
-            sprite->frames[i] = IMG_LoadTexture(app->renderer, fallbackPath);
-            if (sprite->frames[i] == NULL) {
-                printf("Animation frame missing or failed to load: %s or %s (%s)\n",
-                       path, fallbackPath, IMG_GetError());
-                clear_animation(sprite);
-                app->assets.loadedCount -= loadedHere;
-                if (app->assets.loadedCount < 0) {
-                    app->assets.loadedCount = 0;
-                }
-                return;
+            printf("Animation frame missing or failed to load: %s (%s)\n", path, IMG_GetError());
+            clear_animation(sprite);
+            app->assets.loadedCount -= loadedHere;
+            if (app->assets.loadedCount < 0) {
+                app->assets.loadedCount = 0;
             }
+            return;
         }
         SDL_SetTextureBlendMode(sprite->frames[i], SDL_BLENDMODE_BLEND);
         app->assets.loadedCount++;
@@ -519,16 +496,16 @@ static void load_assets(App *app) {
     app->assets.menuButtonSelected = load_asset_texture(app, "assets/ui/menu_button_selected.png");
     app->assets.menuPanel = load_asset_texture(app, "assets/ui/menu_panel.png");
     app->assets.progressBarFrame = load_asset_texture(app, "assets/ui/progress_bar_frame.png");
-    app->assets.magnetTower = load_asset_texture(app, "assets/01_magnet_tower.png");
-    app->assets.swingHammerRig = load_asset_texture(app, "assets/02_swing_hammer_rig.png");
-    app->assets.twinTurbineFan = load_asset_texture(app, "assets/03_twin_turbine_fan.png");
-    app->assets.movingDockHeavy = load_asset_texture(app, "assets/04_moving_dock_heavy.png");
-    app->assets.heavyHazardContainer = load_asset_texture(app, "assets/05_heavy_hazard_container.png");
-    app->assets.precisionFragileCargo = load_asset_texture(app, "assets/06_precision_fragile_cargo.png");
-    app->assets.hydraulicCrusher = load_asset_texture(app, "assets/07_hydraulic_crusher.png");
-    app->assets.extendableBridge = load_asset_texture(app, "assets/08_extendable_bridge_platform.png");
-    app->assets.laserSecurityGate = load_asset_texture(app, "assets/09_laser_security_gate.png");
-    app->assets.rotatingSweeperArm = load_asset_texture(app, "assets/10_rotating_sweeper_arm.png");
+    app->assets.magnetTower = load_asset_texture(app, "assets/hazards/01_magnet_tower.png");
+    app->assets.swingHammerRig = load_asset_texture(app, "assets/hazards/02_swing_hammer_rig.png");
+    app->assets.twinTurbineFan = load_asset_texture(app, "assets/hazards/03_twin_turbine_fan.png");
+    app->assets.movingDockHeavy = load_asset_texture(app, "assets/hazards/04_moving_dock_heavy.png");
+    app->assets.heavyHazardContainer = load_asset_texture(app, "assets/hazards/05_heavy_hazard_container.png");
+    app->assets.precisionFragileCargo = load_asset_texture(app, "assets/hazards/06_precision_fragile_cargo.png");
+    app->assets.hydraulicCrusher = load_asset_texture(app, "assets/hazards/07_hydraulic_crusher.png");
+    app->assets.extendableBridge = load_asset_texture(app, "assets/hazards/08_extendable_bridge_platform.png");
+    app->assets.laserSecurityGate = load_asset_texture(app, "assets/hazards/09_laser_security_gate.png");
+    app->assets.rotatingSweeperArm = load_asset_texture(app, "assets/hazards/10_rotating_sweeper_arm.png");
     load_animation(app, &app->assets.anim.magnetTower, "magnet_tower", "magnet_tower", 8, 12.0, 1);
     load_animation(app, &app->assets.anim.magneticField, "magnetic_field_effect", "magnetic_field_effect", 8, 18.0, 1);
     load_animation(app, &app->assets.anim.turbineFan, "twin_turbine_fan", "twin_turbine_fan", 8, 18.0, 1);
@@ -685,8 +662,7 @@ static void draw_thick_circle_outline(App *app, int cx, int cy, int radius, int 
 static TTF_Font *load_font_size(int size) {
     const char *paths[] = {
         "DejaVuSansMono.ttf",
-        "Assignment9/DejaVuSansMono.ttf",
-        "Assignment10/DejaVuSansMono.ttf",
+        "assets/fonts/DejaVuSansMono.ttf",
         "C:/Windows/Fonts/consola.ttf",
         "C:/Windows/Fonts/lucon.ttf",
         NULL
