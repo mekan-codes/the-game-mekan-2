@@ -33,6 +33,7 @@
 #define MAX_CRUSHERS 2
 #define MAX_HAMMERS 2
 #define MAX_SWEEPERS 2
+#define MAX_APPROACH_GATES 3
 #define ANIM_MAX_FRAMES 8
 #ifndef DEBUG_COLLIDERS
 #define DEBUG_COLLIDERS 0
@@ -49,6 +50,10 @@
 #define STABILIZER_TROLLEY_DAMPING 620.0
 #define BASE_SWING_DAMPING 0.23
 #define STABILIZER_SWING_DAMPING 2.55
+#define STABILIZER_MAX_ENERGY 100.0
+#define STABILIZER_DRAIN_PER_SEC 35.0
+#define STABILIZER_RECHARGE_PER_SEC 14.0
+#define STABILIZER_MIN_EFFECT_ENERGY 10.0
 #define CABLE_RATE 145.0
 #define MIN_CABLE_LENGTH 145.0
 #define MAX_CABLE_LENGTH 470.0
@@ -242,6 +247,10 @@ typedef struct {
 } SweeperHazard;
 
 typedef struct {
+    FRect rect;
+} ApproachGate;
+
+typedef struct {
     const char *name;
     const char *objective;
     const char *hint;
@@ -286,6 +295,8 @@ typedef struct {
     int hammerCount;
     SweeperHazard sweepers[MAX_SWEEPERS];
     int sweeperCount;
+    ApproachGate approachGates[MAX_APPROACH_GATES];
+    int approachGateCount;
 } Level;
 
 typedef struct {
@@ -357,8 +368,10 @@ typedef struct {
     int cargoInWind;
     int cargoInMagnet;
     int chainTooMuchMotion;
+    int routeIncomplete;
     int unstableZoneActive;
     int unstableZoneTooLong;
+    int approachGatePassed[MAX_APPROACH_GATES];
     int lastStarsCollected;
     int bestStars[LEVEL_COUNT];
     double mouseX;
@@ -371,6 +384,7 @@ typedef struct {
     double unstableZoneTimer;
     double starMessageTimer;
     double lastCompletionTime;
+    double stabilizerEnergy;
     LossReason lossReason;
     Trolley trolley;
     Cargo cargo;
@@ -1119,6 +1133,12 @@ static void add_unstable_zone(Level *level, FRect rect, double timeLimit) {
     }
 }
 
+static void add_approach_gate(Level *level, FRect rect) {
+    if (level->approachGateCount < MAX_APPROACH_GATES) {
+        level->approachGates[level->approachGateCount++].rect = rect;
+    }
+}
+
 static FRect moving_gate_path_rect(const MovingGate *gate) {
     FRect path = gate->baseRect;
     if (gate->axis == AXIS_X) {
@@ -1278,19 +1298,20 @@ static void initialize_levels(Game *game) {
     l->startTrolleyX = 155.0;
     l->startCableLength = 270.0;
     l->startTheta = 0.025;
-    l->targetBase = (FRect){980.0, 552.0, 155.0, 82.0};
-    l->stableSpeedLimit = 58.0;
-    l->stableAngleLimit = 0.12;
+    l->targetBase = (FRect){990.0, 552.0, 135.0, 82.0};
+    l->stableSpeedLimit = 52.0;
+    l->stableAngleLimit = 0.11;
     l->stableOmegaLimit = 0.34;
     l->requiredHoldTime = 3.0;
     l->lowTargetRatio = 0.54;
-    add_obstacle(l, (FRect){300.0, 315.0, 250.0, 34.0});
-    add_obstacle(l, (FRect){600.0, 510.0, 96.0, 78.0});
+    add_obstacle(l, (FRect){300.0, 320.0, 250.0, 34.0});
+    add_obstacle(l, (FRect){575.0, 520.0, 90.0, 70.0});
+    add_obstacle(l, (FRect){850.0, 345.0, 210.0, 34.0});
     add_bay_walls(l, 516.0, 116.0);
-    l->gates[l->gateCount++] = (MovingGate){(FRect){745.0, 428.0, 54.0, 148.0}, AXIS_Y, 86.0, 1.45, 0.0, NULL};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){720.0, 430.0, 48.0, 150.0}, AXIS_Y, 95.0, 1.65, 0.0, NULL};
     set_star(l, 0, 430.0, 420.0, 18.0);
-    set_star(l, 1, 560.0, 455.0, 18.0);
-    set_star(l, 2, 900.0, 440.0, 18.0);
+    set_star(l, 1, 625.0, 455.0, 18.0);
+    set_star(l, 2, 905.0, 430.0, 18.0);
 
     l = &game->levels[1];
     l->name = "Level 2: Magnet Corridor";
@@ -1300,22 +1321,23 @@ static void initialize_levels(Game *game) {
     l->startTrolleyX = 155.0;
     l->startCableLength = 285.0;
     l->startTheta = -0.02;
-    l->targetBase = (FRect){1025.0, 552.0, 118.0, 82.0};
-    l->stableSpeedLimit = 44.0;
-    l->stableAngleLimit = 0.082;
-    l->stableOmegaLimit = 0.24;
+    l->targetBase = (FRect){1025.0, 552.0, 112.0, 82.0};
+    l->stableSpeedLimit = 38.0;
+    l->stableAngleLimit = 0.075;
+    l->stableOmegaLimit = 0.22;
     l->requiredHoldTime = 3.0;
     l->lowTargetRatio = 0.60;
     l->cargoKind = CARGO_FRAGILE;
     l->magnetScale = 1.0;
-    add_obstacle(l, (FRect){280.0, 310.0, 260.0, 36.0});
-    add_obstacle(l, (FRect){610.0, 512.0, 105.0, 78.0});
+    add_obstacle(l, (FRect){260.0, 315.0, 250.0, 36.0});
+    add_obstacle(l, (FRect){580.0, 515.0, 105.0, 75.0});
+    add_obstacle(l, (FRect){760.0, 325.0, 220.0, 36.0});
     add_bay_walls(l, 514.0, 118.0);
-    l->magnets[l->magnetCount++] = (MagnetHazard){610.0, 450.0, 145.0, 370.0, 2.4, 0.0, (FRect){586.0, 438.0, 48.0, 86.0}};
-    l->gates[l->gateCount++] = (MovingGate){(FRect){860.0, 430.0, 52.0, 150.0}, AXIS_Y, 80.0, 1.65, 1.0, NULL};
-    set_star(l, 0, 430.0, 410.0, 18.0);
-    set_star(l, 1, 705.0, 410.0, 18.0);
-    set_star(l, 2, 976.0, 428.0, 18.0);
+    l->magnets[l->magnetCount++] = (MagnetHazard){620.0, 455.0, 155.0, 480.0, 2.4, 0.0, (FRect){596.0, 445.0, 48.0, 78.0}};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){870.0, 430.0, 48.0, 150.0}, AXIS_Y, 90.0, 1.75, 1.0, NULL};
+    set_star(l, 0, 420.0, 410.0, 18.0);
+    set_star(l, 1, 720.0, 405.0, 18.0);
+    set_star(l, 2, 970.0, 435.0, 18.0);
 
     l = &game->levels[2];
     l->name = "Level 3: Sweeper Timing";
@@ -1325,22 +1347,24 @@ static void initialize_levels(Game *game) {
     l->startTrolleyX = 150.0;
     l->startCableLength = 320.0;
     l->startTheta = 0.018;
-    l->targetBase = (FRect){1008.0, 552.0, 120.0, 82.0};
-    l->stableSpeedLimit = 32.0;
-    l->stableAngleLimit = 0.15;
+    l->targetBase = (FRect){1008.0, 552.0, 112.0, 82.0};
+    l->stableSpeedLimit = 28.0;
+    l->stableAngleLimit = 0.14;
     l->stableOmegaLimit = 0.48;
-    l->safeChainMotion = 112.0;
-    l->requiredHoldTime = 3.0;
+    l->safeChainMotion = 95.0;
+    l->requiredHoldTime = 3.2;
     l->lowTargetRatio = 0.57;
     l->pendulumMode = PENDULUM_DOUBLE;
     l->dampingScale = 0.98;
-    add_obstacle(l, (FRect){360.0, 320.0, 240.0, 34.0});
-    add_obstacle(l, (FRect){645.0, 510.0, 105.0, 78.0});
+    add_obstacle(l, (FRect){350.0, 320.0, 230.0, 34.0});
+    add_obstacle(l, (FRect){610.0, 515.0, 105.0, 75.0});
+    add_obstacle(l, (FRect){830.0, 345.0, 210.0, 34.0});
     add_bay_walls(l, 514.0, 118.0);
-    l->sweepers[l->sweeperCount++] = (SweeperHazard){760.0, 455.0, 140.0, 15.0, 1.35, 0.0};
-    set_star(l, 0, 455.0, 430.0, 18.0);
-    set_star(l, 1, 630.0, 430.0, 18.0);
-    set_star(l, 2, 935.0, 440.0, 18.0);
+    l->sweepers[l->sweeperCount++] = (SweeperHazard){760.0, 455.0, 170.0, 16.0, 1.65, 0.0};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){910.0, 430.0, 48.0, 145.0}, AXIS_Y, 75.0, 1.45, 0.4, NULL};
+    set_star(l, 0, 460.0, 430.0, 18.0);
+    set_star(l, 1, 605.0, 435.0, 18.0);
+    set_star(l, 2, 1005.0, 430.0, 18.0);
 
     l = &game->levels[3];
     l->name = "Level 4: Magnet Gate Double";
@@ -1350,26 +1374,28 @@ static void initialize_levels(Game *game) {
     l->startTrolleyX = 150.0;
     l->startCableLength = 335.0;
     l->startTheta = -0.02;
-    l->targetBase = (FRect){1050.0, 552.0, 100.0, 82.0};
-    l->stableSpeedLimit = 27.0;
-    l->stableAngleLimit = 0.115;
+    l->targetBase = (FRect){1050.0, 552.0, 92.0, 82.0};
+    l->stableSpeedLimit = 24.0;
+    l->stableAngleLimit = 0.105;
     l->stableOmegaLimit = 0.38;
-    l->safeChainMotion = 78.0;
-    l->requiredHoldTime = 3.5;
+    l->safeChainMotion = 70.0;
+    l->requiredHoldTime = 3.6;
     l->lowTargetRatio = 0.62;
     l->cargoKind = CARGO_FRAGILE;
     l->pendulumMode = PENDULUM_DOUBLE;
     l->dampingScale = 0.92;
-    add_obstacle(l, (FRect){245.0, 310.0, 275.0, 36.0});
-    add_obstacle(l, (FRect){640.0, 512.0, 105.0, 78.0});
-    add_obstacle(l, (FRect){925.0, 512.0, 60.0, 76.0});
+    add_obstacle(l, (FRect){250.0, 315.0, 260.0, 36.0});
+    add_obstacle(l, (FRect){625.0, 515.0, 110.0, 75.0});
+    add_obstacle(l, (FRect){910.0, 515.0, 70.0, 75.0});
+    add_obstacle(l, (FRect){760.0, 320.0, 210.0, 36.0});
     add_bay_walls(l, 512.0, 120.0);
-    add_unstable_zone(l, (FRect){690.0, 148.0, 145.0, 467.0}, 3.2);
-    l->magnets[l->magnetCount++] = (MagnetHazard){600.0, 450.0, 150.0, 390.0, 2.2, 0.3, (FRect){576.0, 438.0, 48.0, 86.0}};
-    l->gates[l->gateCount++] = (MovingGate){(FRect){845.0, 430.0, 54.0, 150.0}, AXIS_Y, 86.0, 1.75, 0.7, NULL};
+    add_unstable_zone(l, (FRect){700.0, 500.0, 145.0, 110.0}, 2.4);
+    l->magnets[l->magnetCount++] = (MagnetHazard){600.0, 455.0, 165.0, 520.0, 2.2, 0.3, (FRect){576.0, 445.0, 48.0, 78.0}};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){845.0, 425.0, 50.0, 155.0}, AXIS_Y, 100.0, 1.90, 0.7, NULL};
+    add_approach_gate(l, (FRect){930.0, 420.0, 70.0, 90.0});
     set_star(l, 0, 365.0, 410.0, 18.0);
-    set_star(l, 1, 700.0, 400.0, 18.0);
-    set_star(l, 2, 960.0, 440.0, 18.0);
+    set_star(l, 1, 705.0, 390.0, 18.0);
+    set_star(l, 2, 990.0, 440.0, 18.0);
 
     l = &game->levels[4];
     l->name = "Level 5: Triple Rotor Wind";
@@ -1379,24 +1405,28 @@ static void initialize_levels(Game *game) {
     l->startTrolleyX = 150.0;
     l->startCableLength = 360.0;
     l->startTheta = 0.016;
-    l->targetBase = (FRect){1030.0, 552.0, 100.0, 82.0};
-    l->stableSpeedLimit = 22.0;
-    l->stableAngleLimit = 0.13;
-    l->stableOmegaLimit = 0.44;
-    l->safeChainMotion = 55.0;
-    l->requiredHoldTime = 3.8;
+    l->targetBase = (FRect){1030.0, 552.0, 92.0, 82.0};
+    l->stableSpeedLimit = 19.0;
+    l->stableAngleLimit = 0.12;
+    l->stableOmegaLimit = 0.38;
+    l->safeChainMotion = 48.0;
+    l->requiredHoldTime = 3.9;
     l->lowTargetRatio = 0.63;
     l->pendulumMode = PENDULUM_TRIPLE;
     l->dampingScale = 0.92;
     l->windScale = 1.0;
-    add_obstacle(l, (FRect){235.0, 312.0, 300.0, 38.0});
-    add_obstacle(l, (FRect){565.0, 512.0, 115.0, 78.0});
+    add_obstacle(l, (FRect){235.0, 315.0, 300.0, 38.0});
+    add_obstacle(l, (FRect){560.0, 515.0, 115.0, 78.0});
+    add_obstacle(l, (FRect){780.0, 330.0, 220.0, 38.0});
+    add_obstacle(l, (FRect){930.0, 515.0, 70.0, 78.0});
     add_bay_walls(l, 512.0, 120.0);
-    l->sweepers[l->sweeperCount++] = (SweeperHazard){660.0, 452.0, 148.0, 16.0, 1.28, 0.6};
-    l->windZones[l->windZoneCount++] = (WindZone){(FRect){865.0, 365.0, 135.0, 205.0}, 430.0, 1};
+    l->sweepers[l->sweeperCount++] = (SweeperHazard){675.0, 455.0, 170.0, 16.0, 1.55, 0.6};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){820.0, 425.0, 48.0, 150.0}, AXIS_Y, 85.0, 1.55, 0.3, NULL};
+    l->windZones[l->windZoneCount++] = (WindZone){(FRect){875.0, 365.0, 135.0, 205.0}, 520.0, 1};
+    add_approach_gate(l, (FRect){895.0, 425.0, 65.0, 90.0});
     set_star(l, 0, 385.0, 410.0, 18.0);
-    set_star(l, 1, 525.0, 430.0, 18.0);
-    set_star(l, 2, 940.0, 430.0, 18.0);
+    set_star(l, 1, 530.0, 430.0, 18.0);
+    set_star(l, 2, 960.0, 430.0, 18.0);
 
     l = &game->levels[5];
     l->name = "Level 6: Final Timing Gauntlet";
@@ -1406,31 +1436,35 @@ static void initialize_levels(Game *game) {
     l->startTrolleyX = 155.0;
     l->startCableLength = 375.0;
     l->startTheta = -0.016;
-    l->targetBase = (FRect){1072.0, 552.0, 84.0, 82.0};
-    l->stableSpeedLimit = 18.0;
-    l->stableAngleLimit = 0.09;
-    l->stableOmegaLimit = 0.30;
-    l->safeChainMotion = 40.0;
-    l->requiredHoldTime = 4.1;
+    l->targetBase = (FRect){1075.0, 552.0, 76.0, 82.0};
+    l->stableSpeedLimit = 16.0;
+    l->stableAngleLimit = 0.08;
+    l->stableOmegaLimit = 0.26;
+    l->safeChainMotion = 36.0;
+    l->requiredHoldTime = 4.2;
     l->lowTargetRatio = 0.64;
     l->cargoKind = CARGO_FRAGILE;
     l->pendulumMode = PENDULUM_TRIPLE;
     l->dampingScale = 0.86;
     l->magnetScale = 1.0;
     l->windScale = 1.0;
-    add_obstacle(l, (FRect){220.0, 310.0, 280.0, 38.0});
-    add_obstacle(l, (FRect){540.0, 512.0, 105.0, 80.0});
-    add_obstacle(l, (FRect){850.0, 512.0, 62.0, 80.0});
-    add_obstacle(l, (FRect){955.0, 352.0, 110.0, 36.0});
+    add_obstacle(l, (FRect){220.0, 315.0, 270.0, 38.0});
+    add_obstacle(l, (FRect){535.0, 515.0, 105.0, 80.0});
+    add_obstacle(l, (FRect){735.0, 320.0, 220.0, 38.0});
+    add_obstacle(l, (FRect){860.0, 515.0, 65.0, 80.0});
+    add_obstacle(l, (FRect){960.0, 350.0, 105.0, 36.0});
     add_bay_walls(l, 512.0, 120.0);
-    add_unstable_zone(l, (FRect){680.0, 148.0, 140.0, 467.0}, 3.0);
-    l->magnets[l->magnetCount++] = (MagnetHazard){585.0, 450.0, 145.0, 390.0, 2.4, 0.0, (FRect){561.0, 438.0, 48.0, 86.0}};
-    l->sweepers[l->sweeperCount++] = (SweeperHazard){785.0, 455.0, 150.0, 16.0, 1.42, 0.2};
-    l->gates[l->gateCount++] = (MovingGate){(FRect){950.0, 430.0, 54.0, 150.0}, AXIS_Y, 86.0, 1.85, 0.9, NULL};
-    l->windZones[l->windZoneCount++] = (WindZone){(FRect){1015.0, 390.0, 120.0, 185.0}, 420.0, -1};
+    add_unstable_zone(l, (FRect){675.0, 500.0, 135.0, 100.0}, 2.2);
+    l->magnets[l->magnetCount++] = (MagnetHazard){580.0, 455.0, 165.0, 560.0, 2.4, 0.0, (FRect){556.0, 445.0, 48.0, 78.0}};
+    l->sweepers[l->sweeperCount++] = (SweeperHazard){785.0, 455.0, 175.0, 16.0, 1.70, 0.2};
+    l->gates[l->gateCount++] = (MovingGate){(FRect){950.0, 425.0, 48.0, 155.0}, AXIS_Y, 100.0, 2.00, 0.9, NULL};
+    l->windZones[l->windZoneCount++] = (WindZone){(FRect){1015.0, 390.0, 120.0, 185.0}, 520.0, -1};
+    add_approach_gate(l, (FRect){690.0, 420.0, 65.0, 90.0});
+    add_approach_gate(l, (FRect){880.0, 420.0, 65.0, 90.0});
+    add_approach_gate(l, (FRect){1015.0, 425.0, 60.0, 90.0});
     set_star(l, 0, 345.0, 405.0, 17.0);
     set_star(l, 1, 650.0, 400.0, 17.0);
-    set_star(l, 2, 1058.0, 440.0, 17.0);
+    set_star(l, 2, 1045.0, 440.0, 17.0);
 
     validate_campaign_stars(game);
 }
@@ -1489,6 +1523,58 @@ static const char *campaign_rank_for_stars(int stars) {
     if (stars >= 11) return "Expert Operator";
     if (stars >= 6) return "Licensed Operator";
     return "Trainee";
+}
+
+static double stabilizer_effect_scale(const Game *game) {
+    double fraction;
+    if (!game->stabilizerHeld) {
+        return 0.0;
+    }
+    if (game->stabilizerEnergy <= 0.0) {
+        return 0.23;
+    }
+    if (game->stabilizerEnergy >= STABILIZER_MIN_EFFECT_ENERGY) {
+        return 1.0;
+    }
+    fraction = game->stabilizerEnergy / STABILIZER_MIN_EFFECT_ENERGY;
+    return 0.23 + 0.77 * fraction;
+}
+
+static void update_stabilizer_energy(Game *game, double dt) {
+    if (game->stabilizerHeld) {
+        if (game->stabilizerEnergy > 0.0) {
+            game->stabilizerEnergy -= STABILIZER_DRAIN_PER_SEC * dt;
+        }
+    } else {
+        game->stabilizerEnergy += STABILIZER_RECHARGE_PER_SEC * dt;
+    }
+    game->stabilizerEnergy = clamp_double(game->stabilizerEnergy, 0.0, STABILIZER_MAX_ENERGY);
+}
+
+static int approach_gate_passed_count(const Game *game, const Level *level) {
+    int i;
+    int count = 0;
+    for (i = 0; i < level->approachGateCount && i < MAX_APPROACH_GATES; ++i) {
+        if (game->approachGatePassed[i]) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static int route_checkpoints_complete(const Game *game, const Level *level) {
+    return approach_gate_passed_count(game, level) >= level->approachGateCount;
+}
+
+static void update_approach_gates(Game *game) {
+    const Level *level = &game->levels[game->selectedLevel];
+    int i;
+    for (i = 0; i < level->approachGateCount && i < MAX_APPROACH_GATES; ++i) {
+        if (!game->approachGatePassed[i]
+            && point_in_frect(game->cargo.x, game->cargo.y, level->approachGates[i].rect)) {
+            game->approachGatePassed[i] = 1;
+        }
+    }
 }
 
 static void sync_chain_lengths(Game *game) {
@@ -1578,13 +1664,16 @@ static void reset_level(Game *game, int levelIndex) {
     game->cargoInWind = 0;
     game->cargoInMagnet = 0;
     game->chainTooMuchMotion = 0;
+    game->routeIncomplete = 0;
     game->unstableZoneActive = 0;
     game->unstableZoneTooLong = 0;
+    memset(game->approachGatePassed, 0, sizeof(game->approachGatePassed));
     game->chainMotion = 0.0;
     game->unstableZoneTimer = 0.0;
     game->starMessageTimer = 0.0;
     game->lastStarsCollected = 0;
     game->lastCompletionTime = 0.0;
+    game->stabilizerEnergy = STABILIZER_MAX_ENERGY;
     game->lossReason = LOSS_NONE;
     for (i = 0; i < STAR_COUNT; ++i) {
         level->stars[i].collected = 0;
@@ -1796,6 +1885,7 @@ static void update_stability_and_win(Game *game, double dt) {
     int chainOk = level->pendulumMode == PENDULUM_SINGLE
                 || level->safeChainMotion <= 0.0
                 || game->chainMotion < level->safeChainMotion;
+    int routeOk = route_checkpoints_complete(game, level);
     int stable = speedOk && (level->pendulumMode == PENDULUM_SINGLE ? singleSwingOk : chainOk);
 
     game->cargoInDeliveryZone = insideX && insideY;
@@ -1803,7 +1893,8 @@ static void update_stability_and_win(Game *game, double dt) {
     game->cargoTooFast = insideTarget && !speedOk;
     game->chainTooMuchMotion = insideTarget && level->pendulumMode != PENDULUM_SINGLE && !chainOk;
     game->cargoTooMuchSwing = insideTarget && level->pendulumMode == PENDULUM_SINGLE && !singleSwingOk;
-    game->deliveryValid = insideTarget && stable;
+    game->routeIncomplete = insideTarget && stable && !routeOk;
+    game->deliveryValid = insideTarget && stable && routeOk;
 
     if (game->deliveryValid) {
         game->stableTimer += dt;
@@ -1907,7 +1998,8 @@ static void update_multi_pendulum(Game *game, const Level *level, double dt) {
     double oldCargoX = game->cargo.x;
     double oldCargoY = game->cargo.y;
     double oldTheta = game->cargo.theta;
-    double dampingRate = (game->stabilizerHeld ? 5.3 : 0.45) * level->dampingScale;
+    double stabilizerEffect = stabilizer_effect_scale(game);
+    double dampingRate = (0.45 + 4.85 * stabilizerEffect) * level->dampingScale;
     double damping = exp(-dampingRate * dt);
     double maxDisplacement = 34.0;
 
@@ -1990,6 +2082,7 @@ static void update_physics(Game *game, double dt) {
     double newCargoY;
     double windAccel;
     double magnetAccel;
+    double stabilizerEffect;
 
     if (game->state != STATE_PLAYING) {
         return;
@@ -2011,10 +2104,13 @@ static void update_physics(Game *game, double dt) {
         return;
     }
 
+    update_stabilizer_energy(game, dt);
+    stabilizerEffect = stabilizer_effect_scale(game);
+
     force = (double)game->motorInput * MOTOR_FORCE;
     force += -TROLLEY_DAMPING * game->trolley.velocity;
-    if (game->stabilizerHeld) {
-        force += -STABILIZER_TROLLEY_DAMPING * game->trolley.velocity;
+    if (stabilizerEffect > 0.0) {
+        force += -STABILIZER_TROLLEY_DAMPING * stabilizerEffect * game->trolley.velocity;
     }
 
     game->trolley.acceleration = force / TROLLEY_MASS;
@@ -2037,8 +2133,8 @@ static void update_physics(Game *game, double dt) {
         update_multi_pendulum(game, level, dt);
     } else {
         pendulumDamping = BASE_SWING_DAMPING * level->dampingScale;
-        if (game->stabilizerHeld) {
-            pendulumDamping += STABILIZER_SWING_DAMPING * level->dampingScale;
+        if (stabilizerEffect > 0.0) {
+            pendulumDamping += STABILIZER_SWING_DAMPING * stabilizerEffect * level->dampingScale;
         }
         windAccel = wind_acceleration_for_cargo(game);
         magnetAccel = magnet_acceleration_for_cargo(game);
@@ -2088,6 +2184,7 @@ static void update_physics(Game *game, double dt) {
         return;
     }
 
+    update_approach_gates(game);
     update_star_collection(game);
     update_stability_and_win(game, dt);
 }
@@ -2399,6 +2496,11 @@ static void draw_hud(App *app, const Game *game) {
     SDL_Color text = color_rgba(236, 245, 246, 255);
     SDL_Color muted = color_rgba(177, 207, 211, 255);
     int stars = count_collected_stars(level);
+    int routePassed = approach_gate_passed_count(game, level);
+    double stabilizerFraction = game->stabilizerEnergy / STABILIZER_MAX_ENERGY;
+    SDL_Color stabilizerColor = game->stabilizerEnergy > STABILIZER_MIN_EFFECT_ENERGY
+                              ? color_rgba(117, 214, 255, 255)
+                              : color_rgba(255, 205, 104, 255);
 
     draw_panel(app, (FRect){0, 0, LOGICAL_W, HUD_H}, color_rgba(25, 47, 58, 245), color_rgba(65, 96, 110, 255));
     fill_rect(app, (FRect){0, 64, LOGICAL_W, 28}, color_rgba(18, 36, 45, 235));
@@ -2412,6 +2514,10 @@ static void draw_hud(App *app, const Game *game) {
     draw_text(app, app->fontSmall, buffer, 750, 15, text);
     snprintf(buffer, sizeof(buffer), "Speed %04.0f", game->cargo.speed);
     draw_text(app, app->fontSmall, buffer, 875, 15, text);
+    snprintf(buffer, sizeof(buffer), "Stabilizer %.0f%%", stabilizerFraction * 100.0);
+    draw_text(app, app->fontSmall, buffer, 875, 37, stabilizerColor);
+    draw_progress_bar(app, (FRect){875, 55, 120, 8}, stabilizerFraction,
+                      stabilizerColor, color_rgba(62, 91, 104, 255));
 
     snprintf(buffer, sizeof(buffer), "Hold steady: %.1f / %.1f s", game->stableTimer, holdTime);
     draw_text(app, app->fontSmall, buffer, 1010, 10, game->deliveryValid ? color_rgba(144, 244, 157, 255) : text);
@@ -2425,6 +2531,11 @@ static void draw_hud(App *app, const Game *game) {
         snprintf(buffer, sizeof(buffer), "Chain %.0f/%.0f", game->chainMotion, level->safeChainMotion);
         draw_text(app, app->fontSmall, buffer, 710, 70,
                   game->chainTooMuchMotion ? color_rgba(255, 205, 104, 255) : color_rgba(177, 207, 211, 255));
+    }
+    if (level->approachGateCount > 0) {
+        snprintf(buffer, sizeof(buffer), "Route %d/%d", routePassed, level->approachGateCount);
+        draw_text(app, app->fontSmall, buffer, 835, 70,
+                  game->routeIncomplete ? color_rgba(255, 205, 104, 255) : color_rgba(132, 218, 255, 255));
     }
     if (game->unstableZoneActive) {
         double limit = level->unstableZoneCount > 0 ? level->unstableZones[0].timeLimit : 4.0;
@@ -2440,6 +2551,8 @@ static void draw_hud(App *app, const Game *game) {
         draw_text(app, app->fontSmall, "Too much swing", 1010, 70, color_rgba(255, 205, 104, 255));
     } else if (game->cargoTooHigh) {
         draw_text(app, app->fontSmall, "Lower cargo", 1025, 70, color_rgba(255, 205, 104, 255));
+    } else if (game->routeIncomplete) {
+        draw_text(app, app->fontSmall, "Route missing", 1010, 70, color_rgba(255, 205, 104, 255));
     } else if (game->cargoInWind) {
         draw_text(app, app->fontSmall, "Wind pushing", 1025, 70, color_rgba(132, 218, 255, 255));
     } else if (game->cargoInMagnet) {
@@ -2520,6 +2633,7 @@ static void drawDeliveryProgressNearTarget(App *app, const Game *game, FRect tar
     else if (game->chainTooMuchMotion) status = "Chain moving";
     else if (game->cargoTooMuchSwing) status = "Too much swing";
     else if (game->cargoTooHigh) status = "Lower cargo";
+    else if (game->routeIncomplete) status = "Route missing";
     else if (!game->cargoInDeliveryZone) status = "Enter bay";
 
     snprintf(buffer, sizeof(buffer), "%s: %.1f / %.1f s", status, game->stableTimer, holdTime);
@@ -2925,6 +3039,25 @@ static void drawMovingDockTrack(App *app, const Level *level) {
     outline_rect(app, path, color_rgba(35, 146, 83, 130));
 }
 
+static void drawApproachGates(App *app, const Game *game, const Level *level, double time) {
+    int i;
+    for (i = 0; i < level->approachGateCount && i < MAX_APPROACH_GATES; ++i) {
+        FRect r = level->approachGates[i].rect;
+        int passed = game->approachGatePassed[i];
+        SDL_Color edge = passed ? color_rgba(93, 236, 154, 180) : color_rgba(82, 184, 255, 160);
+        SDL_Color glow = passed ? color_rgba(75, 214, 111, 24) : color_rgba(70, 165, 255, 22);
+        double pulse = 0.5 + 0.5 * sin(time * 4.5 + (double)i * 1.7);
+        fill_rect(app, r, glow);
+        outline_rect(app, r, edge);
+        outline_rect(app, (FRect){r.x + 4.0, r.y + 4.0, r.w - 8.0, r.h - 8.0},
+                     passed ? color_rgba(93, 236, 154, 90) : color_rgba(82, 184, 255, 70));
+        fill_circle(app, (int)(r.x + r.w * 0.5), (int)(r.y + 5.0), 5,
+                    passed ? color_rgba(93, 236, 154, 220) : color_rgba(82, 184, 255, (Uint8)(150 + pulse * 70.0)));
+        fill_circle(app, (int)(r.x + r.w * 0.5), (int)(r.y + r.h - 5.0), 5,
+                    passed ? color_rgba(93, 236, 154, 220) : color_rgba(82, 184, 255, (Uint8)(150 + pulse * 70.0)));
+    }
+}
+
 static void draw_crane_rail(App *app) {
     int x;
     fill_rect(app, (FRect){50, RAIL_Y, LOGICAL_W - 100, 14}, color_rgba(67, 77, 84, 255));
@@ -3053,6 +3186,7 @@ static void draw_level_world(App *app, const Game *game) {
     for (i = 0; i < level->sweeperCount; ++i) {
         drawSweeperHazard(app, &level->sweepers[i], game->levelElapsed);
     }
+    drawApproachGates(app, game, level, game->levelElapsed);
     drawStars(app, level, game->levelElapsed);
     draw_crane(app, game);
     drawDeliveryProgressNearTarget(app, game, target);
